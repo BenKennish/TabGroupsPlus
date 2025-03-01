@@ -1,0 +1,16 @@
+{
+    "manifest_version": 3,
+    "name": "Tab Group Tidier",
+    "version": "0.8",
+    "description": "Auto-collapses non-active tab groups and places new tabs into the active group.",
+    "permissions": [
+        "tabs",
+        "tabGroups"
+    ],
+    "background": {
+        "service_worker": "background.js"
+    },
+    "action": {
+        "default_title": "Tab Group Tidier"
+    }
+}
