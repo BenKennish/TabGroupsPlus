@@ -23,6 +23,9 @@ function error(msg, data)
     }
 }
 
+
+
+
 // time to wait after activating a tab before collapsing the other tab groups
 var waitToCollapseMs = 3000;
 
@@ -30,6 +33,7 @@ var waitToCollapseMs = 3000;
 var collapseTimers = {};
 
 // Map to store last focused tab id by window id
+// (used when they create a new tab
 var lastFocusedTabIds = {};
 
 // BADHACK - to stop onActivated from stomping all over onCreated
@@ -39,17 +43,85 @@ var lastFocusedTabIds = {};
 // as then the next activated tab will not trigger any group collapsing
 var isNewTab = false;
 
-/*
-function collapseOtherGroups(windowId, activeGroupId)
-{
 
+function collapseOtherGroups(activeTab)
+{
+    var activeGroupId = activeTab.groupId;
+    var windowId = activeTab.windowId;
+
+    log("Tab activated: " + activeTab.id + ", Window: " + windowId);
+
+    if (isNewTab)
+    {
+        log("Ignoring newly created tab")
+        isNewTab = false;
+        return;
+    }
+
+    lastFocusedTabIds[windowId] = activeTab.id;
+
+    if (activeGroupId === -1)
+    {
+        log("Active tab is not in a group. Skipping collapse.");
+        return;
+    }
+
+    log("Active tab " + activeTab.id + " is in group " + activeGroupId);
+
+    // Clear collapse timers for all groups in this window.
+    chrome.tabGroups.query({ windowId: windowId }, function (groups)
+    {
+        if (chrome.runtime.lastError)
+        {
+            error("Failed to query all groups for window " + windowId, chrome.runtime.lastError);
+            return;
+        }
+
+        // look for expanded tab groups in the current window
+        groups.forEach(function (group)
+        {
+            // Don't collapse the active group or already collapsed groups
+            if (group.id !== activeGroupId && !group.collapsed)
+            {
+                if (collapseTimers[group.id])
+                {
+                    clearTimeout(collapseTimers[group.id]);
+                }
+                log("Scheduling collapse for group " + group.id + " in " + waitToCollapseMs + "ms.");
+
+                collapseTimers[group.id] = setTimeout(function ()
+                {
+                    log("Collapsing group " + group.id);
+                    chrome.tabGroups.update(group.id, { collapsed: true }, function ()
+                    {
+                        if (chrome.runtime.lastError)
+                        {
+                            // FIXME: this can happen if user is currently interacting with tabs,
+                            // e.g. dragging one around.  maybe we should we keep retrying?
+                            error("Failed to collapse group " + group.id, chrome.runtime.lastError);
+                        }
+                    });
+                    delete collapseTimers[group.id];
+                }, waitToCollapseMs);
+            }
+            else
+            {
+                if (collapseTimers[group.id])
+                {
+                    clearTimeout(collapseTimers[group.id]);
+                    delete collapseTimers[group.id];
+                    log("Cleared collapse timer for group " + group.id);
+                }
+            }
+        });
+    });
 }
-*/
+
 
 // Listen for tab activation to schedule collapse of non-active groups
 chrome.tabs.onActivated.addListener(function (activeInfo)
 {
-    log("Tab activated: " + activeTab.id)
+    log("Tab activated: " + activeInfo.tabId)
 
     chrome.tabs.get(activeInfo.tabId, function (activeTab)
     {
@@ -58,81 +130,12 @@ chrome.tabs.onActivated.addListener(function (activeInfo)
             error("Failed to get activated tab " + activeInfo.tabId, chrome.runtime.lastError);
             return;
         }
-
-        var activeGroupId = activeTab.groupId;
-        var windowId = activeTab.windowId;
-
-        log("Tab activated: " + activeTab.id + ", window: " + windowId);
-        if (isNewTab)
-        {
-            log(".............. ignoring newly created tab")
-            isNewTab = false;
-            return;
-        }
-
-        lastFocusedTabIds[windowId] = activeTab.id;
-
-        if (activeGroupId === -1)
-        {
-            log("Active tab is not in a group. Skipping collapse.");
-            return;
-        }
-
-        log("Active tab " + activeTab.id + " is in group " + activeGroupId);
-
-        // Clear collapse timers for all groups in this window.
-        chrome.tabGroups.query({ windowId: windowId }, function (groups)
-        {
-
-            if (chrome.runtime.lastError)
-            {
-                error("Failed to query all groups for window " + windowId, chrome.runtime.lastError);
-                return;
-            }
-
-            // look for expanded tab groups in the current window
-            groups.forEach(function (group)
-            {
-                // Don't collapse the active group or already collapsed groups
-                if (group.id !== activeGroupId && !group.collapsed)
-                {
-                    if (collapseTimers[group.id])
-                    {
-                        clearTimeout(collapseTimers[group.id]);
-                    }
-                    log("Scheduling collapse for group " + group.id + " in " + waitToCollapseMs + "ms.");
-
-                    collapseTimers[group.id] = setTimeout(function ()
-                    {
-                        log("Collapsing group " + group.id);
-                        chrome.tabGroups.update(group.id, { collapsed: true }, function ()
-                        {
-                            if (chrome.runtime.lastError)
-                            {
-                                // FIXME: this can happen if user is currently interacting with tabs,
-                                // e.g. dragging one around.  maybe we should we keep retrying?
-                                error("Failed to collapse group " + group.id, chrome.runtime.lastError);
-                            }
-                        });
-                        delete collapseTimers[group.id];
-                    }, waitToCollapseMs);
-                }
-                else
-                {
-                    if (collapseTimers[group.id])
-                    {
-                        clearTimeout(collapseTimers[group.id]);
-                        delete collapseTimers[group.id];
-                        log("Cleared collapse timer for group " + group.id);
-                    }
-                }
-            });
-        });
+        collapseOtherGroups(activeTab);
     });
 });
 
 
-
+// Watch for when a tab is moved into a new group
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) =>
 {
     // Check if the groupId property was updated
@@ -141,8 +144,19 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) =>
         // A change occurred in the tab's group assignment.
         if (changeInfo.groupId !== -1)
         {
-            console.log(`Tab ${tabId} was moved into group ${changeInfo.groupId}`);
-            //TODO: call the code that runs when a tab is activated above
+            log(`Tab ${tabId} was moved to group ${changeInfo.groupId}`);
+
+            chrome.tabs.get(tabId, function (activeTab)
+            {
+                if (chrome.runtime.lastError)
+                {
+                    error("Failed to get activated tab " + tabId, chrome.runtime.lastError);
+                    return;
+                }
+
+                // TODO: maybe check to see if the group that this tab has been moved into is in an expanded state
+                collapseOtherGroups(activeTab);
+            });
         }
     }
 });
@@ -215,6 +229,8 @@ function isFallbackTab(win, newTab, callback)
         }
     }
 }
+
+
 
 
 // Listen for new tab creation to add it to the active group if applicable
