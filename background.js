@@ -3,11 +3,23 @@ function log(msg, data)
 {
     if (data !== undefined)
     {
-        console.log("[TabGroupTidier] " + msg, data);
+        console.log(`[TabGroupTidier] ${msg}`, data);
     }
     else
     {
-        console.log("[TabGroupTidier] " + msg);
+        console.log(`[TabGroupTidier] ${msg}`);
+    }
+}
+
+function warn(msg, data)
+{
+    if (data !== undefined)
+    {
+        console.warn(`[TabGroupTidier] ${msg}`, data);
+    }
+    else
+    {
+        console.warn(`[TabGroupTidier] ${msg}`);
     }
 }
 
@@ -15,65 +27,59 @@ function error(msg, data)
 {
     if (data !== undefined)
     {
-        console.warn("[TabGroupTidier] " + msg, data);
+        console.error(`[TabGroupTidier] ${msg}`, data);
     }
     else
     {
-        console.warn("[TabGroupTidier] " + msg);
+        console.error(`[TabGroupTidier] ${msg}`);
     }
 }
 
 
 
-
-// time to wait after activating a tab before collapsing the other tab groups
-var waitToCollapseMs = 3000;
+// time to wait after activating a tab before collapsing the other tab groups in the window
+let waitToCollapseMs = 3000;
 
 // Map to store collapse timers keyed by group id
-var collapseTimers = {};
+let collapseTimers = {};
 
 // Map to store last focused tab id by window id
 // (used when they create a new tab
-var lastFocusedTabIds = {};
+let lastFocusedTabIds = {};
 
 // BADHACK - to stop onActivated from stomping all over onCreated
 //
 // won't work when new tabs are created but not switched to
 // e.g. when the user middle-clicks a link to open it in a new tab
 // as then the next activated tab will not trigger any group collapsing
-var isNewTab = false;
+let isNewTab = false;
 
 
 function collapseOtherGroups(activeTab)
 {
-    var activeGroupId = activeTab.groupId;
-    var windowId = activeTab.windowId;
-
-    log("Tab activated: " + activeTab.id + ", Window: " + windowId);
-
     if (isNewTab)
     {
-        log("Ignoring newly created tab")
+        log("Ignoring newly created tab " + activeTab.id)
         isNewTab = false;
         return;
     }
 
-    lastFocusedTabIds[windowId] = activeTab.id;
+    lastFocusedTabIds[activeTab.windowId] = activeTab.id;
 
-    if (activeGroupId === -1)
+    if (activeTab.groupId === -1)
     {
-        log("Active tab is not in a group. Skipping collapse.");
+        log(`Active tab ${activeTab.id}, window ${activeTab.windowId} is ungrouped. Skipping collapse.`);
         return;
     }
 
-    log("Active tab " + activeTab.id + " is in group " + activeGroupId);
+    log(`Active tab ${activeTab.id}, window ${activeTab.windowId}, group ${activeTab.groupId}`);
 
     // Clear collapse timers for all groups in this window.
-    chrome.tabGroups.query({ windowId: windowId }, function (groups)
+    chrome.tabGroups.query({ windowId: activeTab.windowId }, function (groups)
     {
         if (chrome.runtime.lastError)
         {
-            error("Failed to query all groups for window " + windowId, chrome.runtime.lastError);
+            error("Failed to query all groups for window " + activeTab.windowId, chrome.runtime.lastError);
             return;
         }
 
@@ -81,13 +87,15 @@ function collapseOtherGroups(activeTab)
         groups.forEach(function (group)
         {
             // Don't collapse the active group or already collapsed groups
-            if (group.id !== activeGroupId && !group.collapsed)
+            if (group.id !== activeTab.groupId && !group.collapsed)
             {
+                // cancel a collapse operations if already scheduled
                 if (collapseTimers[group.id])
                 {
                     clearTimeout(collapseTimers[group.id]);
                 }
-                log("Scheduling collapse for group " + group.id + " in " + waitToCollapseMs + "ms.");
+
+                log(`Scheduling collapse for group ${group.id} in ${waitToCollapseMs} ms.`);
 
                 collapseTimers[group.id] = setTimeout(function ()
                 {
@@ -106,11 +114,12 @@ function collapseOtherGroups(activeTab)
             }
             else
             {
+                // cancel any collapse operations that are already scheduled for the active group
                 if (collapseTimers[group.id])
                 {
                     clearTimeout(collapseTimers[group.id]);
                     delete collapseTimers[group.id];
-                    log("Cleared collapse timer for group " + group.id);
+                    log("Cleared collapse timer for active group " + group.id);
                 }
             }
         });
@@ -121,7 +130,7 @@ function collapseOtherGroups(activeTab)
 // Listen for tab activation to schedule collapse of non-active groups
 chrome.tabs.onActivated.addListener(function (activeInfo)
 {
-    log("Tab activated: " + activeInfo.tabId)
+    //log("Tab activated: " + activeInfo.tabId)
 
     chrome.tabs.get(activeInfo.tabId, function (activeTab)
     {
@@ -146,6 +155,9 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) =>
         {
             log(`Tab ${tabId} was moved to group ${changeInfo.groupId}`);
 
+            // if a tab is moved from an expanded group into a collapsed group,
+            // the group will stay collapsed and a different tab may be activated
+
             chrome.tabs.get(tabId, function (activeTab)
             {
                 if (chrome.runtime.lastError)
@@ -162,12 +174,13 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) =>
 });
 
 
-
+// tests to see if a new tab is a 'fallback' tab: a tab that was automatically created because the user collapsed all
+// tab groups in the window and there were no ungrouped tabs
 function isFallbackTab(win, newTab, callback)
 {
     // Assume `win` is a window object with a populated `tabs` array,
     // and `newTab` is the newly created tab object.
-    // return true if the window consists of only this tab (ungrouped) and 0 or more collapsed tab groups
+    // return true if the window consists only of this tab (ungrouped) and 0 or more collapsed tab groups
 
     let otherTabs = win.tabs.filter(tab => tab.id !== newTab.id);
 
@@ -231,15 +244,13 @@ function isFallbackTab(win, newTab, callback)
 }
 
 
-
-
 // Listen for new tab creation to add it to the active group if applicable
 // if the user wants to create a new ungrouped tab on a window with only tab groups,
 // they can create the tab and then drag it outside the tab groups
 chrome.tabs.onCreated.addListener(function (newTab)
 {
 
-    log("New tab created: " + newTab.id + " in window " + newTab.windowId);
+    log(`New tab created: ${newTab.id} in window ${newTab.windowId}`);
     isNewTab = true;
 
     if (newTab.groupId !== -1)
@@ -266,9 +277,6 @@ chrome.tabs.onCreated.addListener(function (newTab)
                 return;
             }
 
-            console.log(win)
-            console.log(newTab)
-
             if (lastFocusedTabIds[newTab.windowId])
             {
                 chrome.tabs.get(lastFocusedTabIds[newTab.windowId], function (lastFocusedTab)
@@ -282,8 +290,9 @@ chrome.tabs.onCreated.addListener(function (newTab)
 
                     if (lastFocusedTab && lastFocusedTab.groupId !== -1)
                     {
-                        log("Adding new tab " + newTab.id + " to group of last tab " + lastFocusedTab.groupId);
+                        log(`Adding new tab ${newTab.id} to group of last tab ${lastFocusedTab.groupId}`);
 
+                        // Add the new tab to the group of the last focused tab
                         chrome.tabs.group({ groupId: lastFocusedTab.groupId, tabIds: newTab.id }, function ()
                         {
                             if (chrome.runtime.lastError)
@@ -300,8 +309,8 @@ chrome.tabs.onCreated.addListener(function (newTab)
             }
             else
             {
-                log("No last focused tab found for window " + newTab.windowId);
                 // weird. just let the new tab be where it is
+                warn("No last focused tab found for window " + newTab.windowId);
             }
 
         }));
