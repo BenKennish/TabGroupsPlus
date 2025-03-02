@@ -3,11 +3,11 @@ function log(msg, data)
 {
     if (data !== undefined)
     {
-        console.log(`[TabGroupTidier] ${msg}`, data);
+        console.log(`[TabGroupPlus] ${msg}`, data);
     }
     else
     {
-        console.log(`[TabGroupTidier] ${msg}`);
+        console.log(`[TabGroupPlus] ${msg}`);
     }
 }
 
@@ -15,11 +15,11 @@ function warn(msg, data)
 {
     if (data !== undefined)
     {
-        console.warn(`[TabGroupTidier] ${msg}`, data);
+        console.warn(`[TabGroupPlus] ${msg}`, data);
     }
     else
     {
-        console.warn(`[TabGroupTidier] ${msg}`);
+        console.warn(`[TabGroupPlus] ${msg}`);
     }
 }
 
@@ -27,11 +27,11 @@ function error(msg, data)
 {
     if (data !== undefined)
     {
-        console.error(`[TabGroupTidier] ${msg}`, data);
+        console.error(`[TabGroupPlus] ${msg}`, data);
     }
     else
     {
-        console.error(`[TabGroupTidier] ${msg}`);
+        console.error(`[TabGroupPlus] ${msg}`);
     }
 }
 
