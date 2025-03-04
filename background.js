@@ -54,13 +54,11 @@ let collapseTimers = {};
 let lastFocusedTabIds = {};
 
 
-// BADHACK - to stop onActivated from stomping all over onCreated
-//
+// hack to stop onActivated from stomping all over onCreated
+let newlyCreatedTabs = new Set();
 // won't work when new tabs are created but not switched to
 // e.g. when the user middle-clicks a link to open it in a new tab
 // as then the next activated tab will not trigger any group collapsing
-let isNewTab = false;
-
 
 function collapseOtherGroups(activeTab)
 {
@@ -143,7 +141,7 @@ function isFallbackTab(win, newTab, callback)
 
     if (otherTabs.length === 0)
     {
-        log("The window contains only the new tab.");
+        //log("The window contains only the new tab.");
         callback(true);
         return;
     }
@@ -154,7 +152,7 @@ function isFallbackTab(win, newTab, callback)
 
         if (nonGroupedTabs.length > 0)
         {
-            log("Some (other) tabs are not in any tab group.", nonGroupedTabs);
+            //log("Some (other) tabs are not in any tab group.", nonGroupedTabs);
             callback(false);
             return;
         }
@@ -187,12 +185,12 @@ function isFallbackTab(win, newTab, callback)
 
                 if (allCollapsed)
                 {
-                    log("The window contains only collapsed tab groups and the new tab.");
+                    //log("The window contains only collapsed tab groups and the new tab.");
                     callback(true);
                 }
                 else
                 {
-                    log("Not all tab groups are collapsed.");
+                    //log("Not all tab groups are collapsed.");
                     callback(false);
                 }
             });
@@ -206,7 +204,7 @@ function registerListeners()
     // Listen for tab activation to schedule collapse of non-active groups
     chrome.tabs.onActivated.addListener(function (activeInfo)
     {
-        //log("Tab activated: " + activeInfo.tabId)
+        log(">>> Tab activated: " + activeInfo.tabId);
 
         chrome.tabs.get(activeInfo.tabId, function (activeTab)
         {
@@ -216,12 +214,10 @@ function registerListeners()
                 return;
             }
 
-            if (isNewTab)
+            if (newlyCreatedTabs.has(activeTab.id))
             {
-                // BADHACK: this will only work if the newly created tab is activated immediately
-                // else the user's next activated tab will be ignored
-                log("Ignoring activation of newly created tab " + activeTab.id)
-                isNewTab = false;
+                log("Ignoring first activation of newly created tab " + activeTab.id)
+                newlyCreatedTabs.delete(activeTab.id);
                 return;
             }
             collapseOtherGroups(activeTab);
@@ -232,17 +228,20 @@ function registerListeners()
     // Listen for when a tab is updated, in particular when moved into a new group
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) =>
     {
+        //log(">>> Tab updated: " + tabId);
+
         // Check if the groupId property was updated
         if (changeInfo.hasOwnProperty('groupId'))
         {
             // A change occurred in the tab's group assignment.
             if (changeInfo.groupId !== -1)
             {
-                log(`Tab ${tabId} was moved to group ${changeInfo.groupId}`);
+                log(`>>> Tab ${tabId} was moved to group ${changeInfo.groupId}`);
 
                 // if a tab is moved from an expanded group into a collapsed group,
                 // the group will stay collapsed and a different tab may be activated
 
+                // FIXME: the tab that was updated might not be the active tab!
                 chrome.tabs.get(tabId, function (activeTab)
                 {
                     if (chrome.runtime.lastError)
@@ -257,13 +256,14 @@ function registerListeners()
     });
 
     // Listen for new tab creation to add it to the active group if applicable
-    // if the user wants to create a new ungrouped tab on a window with only tab groups,
+    //
+    // note: if the user wants to create a new ungrouped tab on a window with only tab groups,
     // they can create the tab and then drag it outside the tab groups
     chrome.tabs.onCreated.addListener(function (newTab)
     {
+        log(`>>> Tab created: ${newTab.id} in window ${newTab.windowId}`);
 
-        log(`New tab created: ${newTab.id} in window ${newTab.windowId}`);
-        isNewTab = true;
+        newlyCreatedTabs.add(newTab.id);
 
         if (newTab.groupId !== -1)
         {
@@ -291,6 +291,7 @@ function registerListeners()
 
                 if (lastFocusedTabIds[newTab.windowId])
                 {
+                    // retrieve the last focused tab in this window (before this new tab)
                     chrome.tabs.get(lastFocusedTabIds[newTab.windowId], function (lastFocusedTab)
                     {
                         if (chrome.runtime.lastError)
@@ -304,6 +305,7 @@ function registerListeners()
                             log(`Adding new tab ${newTab.id} to group of last tab ${lastFocusedTab.groupId}`);
 
                             // Add the new tab to the group of the last focused tab
+                            // NOTE: this will trigger the onUpdated event and therefore collapseOtherGroups
                             chrome.tabs.group({ groupId: lastFocusedTab.groupId, tabIds: newTab.id }, function ()
                             {
                                 if (chrome.runtime.lastError)
