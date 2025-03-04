@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Tab Groups Plus",
-    "version": "0.85",
+    "version": "0.86.1",
     "description": "Adds Tab Groups features; auto-collapses groups except the active tab's group, and adds newly created tabs to the tab group of the currently active tab",
     "permissions": [
         "tabs",

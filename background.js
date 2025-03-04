@@ -39,7 +39,7 @@ function error(msg, data)
 let browserStartingUp = false;
 
 // time to wait if browser is starting up, before listening for events
-let extensionStartDelayMs = 5000;
+let extensionStartDelayMs = 10000;
 
 // time to wait after activating a tab before collapsing the other tab groups in the window
 let waitToCollapseMs = 3000;
@@ -332,8 +332,8 @@ function registerListeners()
     });
     */
 
+    browserStartingUp = false;
     log("Listeners registered");
-
 }
 
 
