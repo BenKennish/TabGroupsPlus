@@ -38,11 +38,13 @@ function error(msg, data)
 
 let browserStartingUp = false;
 
+const checkBrowserStartupDelayMs = 1000;
+
 // time to wait if browser is starting up, before listening for events
-let extensionStartDelayMs = 10000;
+const extensionStartDelayMs = 10000;
 
 // time to wait after activating a tab before collapsing the other tab groups in the window
-let waitToCollapseMs = 3000;
+const waitToCollapseMs = 3000;
 
 // Map to store collapse timers keyed by group id
 let collapseTimers = {};
@@ -62,12 +64,6 @@ let isNewTab = false;
 
 function collapseOtherGroups(activeTab)
 {
-    if (isNewTab)
-    {
-        log("Ignoring newly created tab " + activeTab.id)
-        isNewTab = false;
-        return;
-    }
 
     lastFocusedTabIds[activeTab.windowId] = activeTab.id;
 
@@ -102,7 +98,7 @@ function collapseOtherGroups(activeTab)
                     clearTimeout(collapseTimers[group.id]);
                 }
 
-                log(`Scheduling collapse for group ${group.id} in ${waitToCollapseMs} ms.`);
+                log(`Scheduling collapse for group ${group.id} in ${waitToCollapseMs} ms...`);
 
                 collapseTimers[group.id] = setTimeout(function ()
                 {
@@ -219,6 +215,15 @@ function registerListeners()
                 error("Failed to get activated tab " + activeInfo.tabId, chrome.runtime.lastError);
                 return;
             }
+
+            if (isNewTab)
+            {
+                // BADHACK: this will only work if the newly created tab is activated immediately
+                // else the user's next activated tab will be ignored
+                log("Ignoring activation of newly created tab " + activeTab.id)
+                isNewTab = false;
+                return;
+            }
             collapseOtherGroups(activeTab);
         });
     });
@@ -245,20 +250,15 @@ function registerListeners()
                         error("Failed to get activated tab " + tabId, chrome.runtime.lastError);
                         return;
                     }
-
-                    // TODO: maybe check to see if the group that this tab has been moved into is in an expanded state
                     collapseOtherGroups(activeTab);
                 });
             }
         }
     });
 
-    // this bit disabled as fear it is messing up
-    //
     // Listen for new tab creation to add it to the active group if applicable
     // if the user wants to create a new ungrouped tab on a window with only tab groups,
     // they can create the tab and then drag it outside the tab groups
-    /*
     chrome.tabs.onCreated.addListener(function (newTab)
     {
 
@@ -281,7 +281,7 @@ function registerListeners()
 
             // when the user collapses all tab groups in a window in which there are no other tabs,
             // the browser will auto create a new ungrouped 'fallback' tab which shouldn't be added to a tab group
-            if (isFallbackTab(win, newTab, function (isFallback)
+            isFallbackTab(win, newTab, function (isFallback)
             {
                 if (isFallback)
                 {
@@ -293,7 +293,6 @@ function registerListeners()
                 {
                     chrome.tabs.get(lastFocusedTabIds[newTab.windowId], function (lastFocusedTab)
                     {
-
                         if (chrome.runtime.lastError)
                         {
                             error("Error retrieving tab: ", chrome.runtime.lastError);
@@ -325,12 +324,11 @@ function registerListeners()
                     warn("No last focused tab found for window " + newTab.windowId);
                 }
 
-            }));
+            });
 
         });
 
     });
-    */
 
     browserStartingUp = false;
     log("Listeners registered");
@@ -347,7 +345,6 @@ chrome.runtime.onStartup.addListener(() =>
     setTimeout(registerListeners, extensionStartDelayMs);
 });
 
-
 setTimeout(() =>
 {
     if (!browserStartingUp)
@@ -355,4 +352,6 @@ setTimeout(() =>
         log("Browser is already running. Registering listeners now.");
         registerListeners();
     }
-}, 1000);  // wait 1000ms before checking if the browser is starting up
+}, checkBrowserStartupDelayMs);  // wait 1000ms before checking if the browser is starting up
+
+log("Extension loaded. Checking for browser startup in " + checkBrowserStartupDelayMs + " ms...");
