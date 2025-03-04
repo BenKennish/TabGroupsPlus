@@ -36,6 +36,10 @@ function error(msg, data)
 }
 
 
+let browserStartingUp = false;
+
+// time to wait if browser is starting up, before listening for events
+let extensionStartDelayMs = 5000;
 
 // time to wait after activating a tab before collapsing the other tab groups in the window
 let waitToCollapseMs = 3000;
@@ -46,6 +50,7 @@ let collapseTimers = {};
 // Map to store last focused tab id by window id
 // (used when they create a new tab
 let lastFocusedTabIds = {};
+
 
 // BADHACK - to stop onActivated from stomping all over onCreated
 //
@@ -73,6 +78,8 @@ function collapseOtherGroups(activeTab)
     }
 
     log(`Active tab ${activeTab.id}, window ${activeTab.windowId}, group ${activeTab.groupId}`);
+
+    // TODO: if active tab is somehow in a collapsed group, stop here?
 
     // Clear collapse timers for all groups in this window.
     chrome.tabGroups.query({ windowId: activeTab.windowId }, function (groups)
@@ -127,55 +134,9 @@ function collapseOtherGroups(activeTab)
 }
 
 
-// Listen for tab activation to schedule collapse of non-active groups
-chrome.tabs.onActivated.addListener(function (activeInfo)
-{
-    //log("Tab activated: " + activeInfo.tabId)
 
-    chrome.tabs.get(activeInfo.tabId, function (activeTab)
-    {
-        if (chrome.runtime.lastError)
-        {
-            error("Failed to get activated tab " + activeInfo.tabId, chrome.runtime.lastError);
-            return;
-        }
-        collapseOtherGroups(activeTab);
-    });
-});
-
-
-// Watch for when a tab is moved into a new group
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) =>
-{
-    // Check if the groupId property was updated
-    if (changeInfo.hasOwnProperty('groupId'))
-    {
-        // A change occurred in the tab's group assignment.
-        if (changeInfo.groupId !== -1)
-        {
-            log(`Tab ${tabId} was moved to group ${changeInfo.groupId}`);
-
-            // if a tab is moved from an expanded group into a collapsed group,
-            // the group will stay collapsed and a different tab may be activated
-
-            chrome.tabs.get(tabId, function (activeTab)
-            {
-                if (chrome.runtime.lastError)
-                {
-                    error("Failed to get activated tab " + tabId, chrome.runtime.lastError);
-                    return;
-                }
-
-                // TODO: maybe check to see if the group that this tab has been moved into is in an expanded state
-                collapseOtherGroups(activeTab);
-            });
-        }
-    }
-});
-
-
-// tests to see if a new tab is a 'fallback' tab: a tab that was automatically created because the user collapsed all
-// tab groups in the window and there were no ungrouped tabs
+// tests to see if a new tab is (likely to be) a 'fallback' tab: a tab that was automatically created because the user
+// collapsed all tab groups in the window and there were no ungrouped tabs
 function isFallbackTab(win, newTab, callback)
 {
     // Assume `win` is a window object with a populated `tabs` array,
@@ -244,77 +205,154 @@ function isFallbackTab(win, newTab, callback)
 }
 
 
-// Listen for new tab creation to add it to the active group if applicable
-// if the user wants to create a new ungrouped tab on a window with only tab groups,
-// they can create the tab and then drag it outside the tab groups
-chrome.tabs.onCreated.addListener(function (newTab)
+function registerListeners()
 {
-
-    log(`New tab created: ${newTab.id} in window ${newTab.windowId}`);
-    isNewTab = true;
-
-    if (newTab.groupId !== -1)
+    // Listen for tab activation to schedule collapse of non-active groups
+    chrome.tabs.onActivated.addListener(function (activeInfo)
     {
-        log("New tab is already in a group.");
-        return;
-    }
+        //log("Tab activated: " + activeInfo.tabId)
 
-    chrome.windows.get(newTab.windowId, { populate: true }, function (win)
-    {
-        if (chrome.runtime.lastError)
+        chrome.tabs.get(activeInfo.tabId, function (activeTab)
         {
-            error("Error getting window for new tab", chrome.runtime.lastError);
-            return;
-        }
-
-        // when the user collapses all tab groups in a window in which there are no other tabs,
-        // the browser will auto create a new ungrouped 'fallback' tab which shouldn't be added to a tab group
-        if (isFallbackTab(win, newTab, function (isFallback)
-        {
-            if (isFallback)
+            if (chrome.runtime.lastError)
             {
-                log("Ignoring fallback tab")
+                error("Failed to get activated tab " + activeInfo.tabId, chrome.runtime.lastError);
                 return;
             }
+            collapseOtherGroups(activeTab);
+        });
+    });
 
-            if (lastFocusedTabIds[newTab.windowId])
+
+    // Listen for when a tab is updated, in particular when moved into a new group
+    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) =>
+    {
+        // Check if the groupId property was updated
+        if (changeInfo.hasOwnProperty('groupId'))
+        {
+            // A change occurred in the tab's group assignment.
+            if (changeInfo.groupId !== -1)
             {
-                chrome.tabs.get(lastFocusedTabIds[newTab.windowId], function (lastFocusedTab)
-                {
+                log(`Tab ${tabId} was moved to group ${changeInfo.groupId}`);
 
+                // if a tab is moved from an expanded group into a collapsed group,
+                // the group will stay collapsed and a different tab may be activated
+
+                chrome.tabs.get(tabId, function (activeTab)
+                {
                     if (chrome.runtime.lastError)
                     {
-                        error("Error retrieving tab: ", chrome.runtime.lastError);
+                        error("Failed to get activated tab " + tabId, chrome.runtime.lastError);
                         return;
                     }
 
-                    if (lastFocusedTab && lastFocusedTab.groupId !== -1)
-                    {
-                        log(`Adding new tab ${newTab.id} to group of last tab ${lastFocusedTab.groupId}`);
-
-                        // Add the new tab to the group of the last focused tab
-                        chrome.tabs.group({ groupId: lastFocusedTab.groupId, tabIds: newTab.id }, function ()
-                        {
-                            if (chrome.runtime.lastError)
-                            {
-                                error("Error grouping new tab", chrome.runtime.lastError);
-                            }
-                        });
-                    }
-                    else
-                    {
-                        log("No active group found for last focused tab " + lastFocusedTab.id);
-                    }
+                    // TODO: maybe check to see if the group that this tab has been moved into is in an expanded state
+                    collapseOtherGroups(activeTab);
                 });
             }
-            else
-            {
-                // weird. just let the new tab be where it is
-                warn("No last focused tab found for window " + newTab.windowId);
-            }
-
-        }));
-
+        }
     });
 
+    // this bit disabled as fear it is messing up
+    //
+    // Listen for new tab creation to add it to the active group if applicable
+    // if the user wants to create a new ungrouped tab on a window with only tab groups,
+    // they can create the tab and then drag it outside the tab groups
+    /*
+    chrome.tabs.onCreated.addListener(function (newTab)
+    {
+
+        log(`New tab created: ${newTab.id} in window ${newTab.windowId}`);
+        isNewTab = true;
+
+        if (newTab.groupId !== -1)
+        {
+            log("New tab is already in a group.");
+            return;
+        }
+
+        chrome.windows.get(newTab.windowId, { populate: true }, function (win)
+        {
+            if (chrome.runtime.lastError)
+            {
+                error("Error getting window for new tab", chrome.runtime.lastError);
+                return;
+            }
+
+            // when the user collapses all tab groups in a window in which there are no other tabs,
+            // the browser will auto create a new ungrouped 'fallback' tab which shouldn't be added to a tab group
+            if (isFallbackTab(win, newTab, function (isFallback)
+            {
+                if (isFallback)
+                {
+                    log("Ignoring fallback tab")
+                    return;
+                }
+
+                if (lastFocusedTabIds[newTab.windowId])
+                {
+                    chrome.tabs.get(lastFocusedTabIds[newTab.windowId], function (lastFocusedTab)
+                    {
+
+                        if (chrome.runtime.lastError)
+                        {
+                            error("Error retrieving tab: ", chrome.runtime.lastError);
+                            return;
+                        }
+
+                        if (lastFocusedTab && lastFocusedTab.groupId !== -1)
+                        {
+                            log(`Adding new tab ${newTab.id} to group of last tab ${lastFocusedTab.groupId}`);
+
+                            // Add the new tab to the group of the last focused tab
+                            chrome.tabs.group({ groupId: lastFocusedTab.groupId, tabIds: newTab.id }, function ()
+                            {
+                                if (chrome.runtime.lastError)
+                                {
+                                    error("Error grouping new tab", chrome.runtime.lastError);
+                                }
+                            });
+                        }
+                        else
+                        {
+                            log("No active group found for last focused tab " + lastFocusedTab.id);
+                        }
+                    });
+                }
+                else
+                {
+                    // weird. just let the new tab be where it is
+                    warn("No last focused tab found for window " + newTab.windowId);
+                }
+
+            }));
+
+        });
+
+    });
+    */
+
+    log("Listeners registered");
+
+}
+
+
+// Workaround: delay starting extension logic for short while so as to avoid messing while
+// the browser restores windows, tabs, and groups from a previous session
+chrome.runtime.onStartup.addListener(() =>
+{
+    // Initialization code for startup scenarios
+    log("Browser is starting up. Sleeping for " + extensionStartDelayMs + " ms before registering listeners.");
+    browserStartingUp = true;
+    setTimeout(registerListeners, extensionStartDelayMs);
 });
+
+
+setTimeout(() =>
+{
+    if (!browserStartingUp)
+    {
+        log("Browser is already running. Registering listeners now.");
+        registerListeners();
+    }
+}, 1000);  // wait 1000ms before checking if the browser is starting up
