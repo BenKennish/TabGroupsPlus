@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
     "name": "Tab Groups Plus",
-    "version": "0.86.1",
-    "description": "Adds Tab Groups features; auto-collapses groups except the active tab's group, and adds newly created tabs to the tab group of the currently active tab",
+    "version": "0.87.0",
+    "description": "Auto-collapses tab groups that don't contain the active tab, and adds new tabs to the currently active tab's group",
     "permissions": [
         "tabs",
         "tabGroups"
@@ -10,6 +10,19 @@
     "background": {
         "service_worker": "background.js"
     },
+    "host_permissions": [
+        "*://*/*"
+    ],
+    "content_scripts": [
+        {
+            "matches": [
+                "*://*/*"
+            ],
+            "js": [
+                "content.js"
+            ]
+        }
+    ],
     "action": {
         "default_title": "Tab Groups Plus"
     }
