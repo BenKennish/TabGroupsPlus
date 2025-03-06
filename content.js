@@ -13,7 +13,7 @@ if (!window.isInjected)
     // Function to handle mouseenter event
     function handleMouseEnter()
     {
-        console.log('[TabGroupsPlus] Mouse entered content area - sending message to background script');
+        //console.log('[TabGroupsPlus] Mouse entered content area - sending message to background script');
         chrome.runtime.sendMessage({ action: 'mouseInContentArea', value: true });
     }
 
