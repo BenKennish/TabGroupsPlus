@@ -42,60 +42,15 @@ let newlyCreatedTabs = new Set();
 // e.g. when the user middle-clicks a link to open it in a new tab
 // as then the next activated tab will not trigger any group collapsing
 
-
 // Console logging helpers
 
-function debug(msg, data)
+if (!showDebugConsoleMsgs)
 {
-    if (showDebugConsoleMsgs)
-    {
-        if (data !== undefined)
-        {
-            console.log(`[TabGroupsPlus]{DEBUG} ${msg}`, data);
-        }
-        else
-        {
-            console.log(`[TabGroupsPlus]{DEBUG} ${msg}`);
-        }
-    }
+    console.debug = function () { };
 }
 
-function log(msg, data)
-{
-    if (data !== undefined)
-    {
-        console.log(`[TabGroupsPlus] ${msg}`, data);
-    }
-    else
-    {
-        console.log(`[TabGroupsPlus] ${msg}`);
-    }
-}
-
-function warn(msg, data)
-{
-    if (data !== undefined)
-    {
-        console.warn(`[TabGroupsPlus] ${msg}`, data);
-    }
-    else
-    {
-        console.warn(`[TabGroupsPlus] ${msg}`);
-    }
-}
-
-function error(msg, data)
-{
-    if (data !== undefined)
-    {
-        console.error(`[TabGroupsPlus] ${msg}`, data);
-    }
-    else
-    {
-        console.error(`[TabGroupsPlus] ${msg}`);
-    }
-}
-
+// what we put before log lines to identify ourself
+const consolePrefix = "[TabGroupsPlus] ";
 
 // check if our content script has been injected on the given tab
 // content script cannot inject into certain content, e.g. about:blank, Google Web Store, browser settings, etc
@@ -125,11 +80,11 @@ function collapseOtherGroups(tab, delayMs)
 
     if (tab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE)
     {
-        log(`Tab ${tab.id}, window ${tab.windowId} is ungrouped. Skipping collapse of other groups.`);
+        console.log(consolePrefix + `Tab ${tab.id}, window ${tab.windowId} is ungrouped. Skipping collapse of other groups.`);
         return;
     }
 
-    debug(`Tab ${tab.id}, window ${tab.windowId}, group ${tab.groupId} : looking for other groups to collapse...`);
+    console.debug(consolePrefix + `Tab ${tab.id}, window ${tab.windowId}, group ${tab.groupId} : looking for other groups to collapse...`);
 
 
     // fetch group of the tab
@@ -137,19 +92,19 @@ function collapseOtherGroups(tab, delayMs)
     {
         if (chrome.runtime.lastError)
         {
-            error("Failed to query group " + tab.groupId, chrome.runtime.lastError);
+            console.error(consolePrefix + "Failed to query group " + tab.groupId, chrome.runtime.lastError);
             return;
         }
 
         if (!group)
         {
-            error("Failed to retrieve tab's group" + tab.groupId, group);
+            console.error(consolePrefix + "Failed to retrieve tab's group" + tab.groupId, group);
             return;
         }
 
         if (group.collapsed)
         {
-            warn("Group of the tab is collapsed.  Bit unexpected.  Bailing out");
+            console.warn(consolePrefix + "Group of the tab is collapsed.  Bit unexpected.  Bailing out");
             return;
         }
 
@@ -158,7 +113,7 @@ function collapseOtherGroups(tab, delayMs)
         {
             if (chrome.runtime.lastError)
             {
-                error("Failed to query all groups for window " + tab.windowId, chrome.runtime.lastError);
+                console.error(consolePrefix + "Failed to query all groups for window " + tab.windowId, chrome.runtime.lastError);
                 return;
             }
 
@@ -176,19 +131,19 @@ function collapseOtherGroups(tab, delayMs)
                         clearTimeout(collapseTimers[g.id]);
                     }
 
-                    log(`Scheduling collapse for group ${g.id} in ${delayMs} ms...`);
+                    console.log(consolePrefix + `Scheduling collapse for group ${g.id} in ${delayMs} ms...`);
                     numCollapsedGroups++;
 
                     collapseTimers[g.id] = setTimeout(function ()
                     {
-                        log("Collapsing group " + g.id);
+                        console.log(consolePrefix + "Collapsing group " + g.id);
                         chrome.tabGroups.update(g.id, { collapsed: true }, function ()
                         {
                             if (chrome.runtime.lastError)
                             {
                                 // FIXME: fails if user is currently interacting with tabs,
                                 // e.g. dragging one around.  maybe we should we keep retrying?
-                                error("Failed to collapse group " + g.id, chrome.runtime.lastError);
+                                console.error(consolePrefix + "Failed to collapse group " + g.id, chrome.runtime.lastError);
                             }
                         });
                         delete collapseTimers[g.id];
@@ -203,12 +158,12 @@ function collapseOtherGroups(tab, delayMs)
                     {
                         clearTimeout(collapseTimers[g.id]);
                         delete collapseTimers[g.id];
-                        debug("Cleared collapse timer for active/collapsed group: " + group.id);
+                        console.debug(consolePrefix + "Cleared collapse timer for active/collapsed group: " + group.id);
                     }
                 }
             });
 
-            log("Groups scheduled for collapse:", numCollapsedGroups);
+            console.log(consolePrefix + "Groups scheduled for collapse:", numCollapsedGroups);
         });
     });
 
@@ -226,7 +181,7 @@ function isFallbackTab(newTab, callback)
 
     if (!newTab)
     {
-        error("No new tab provided to isFallbackTab");
+        console.error(consolePrefix + "No new tab provided to isFallbackTab");
         callback(false);
     }
 
@@ -234,7 +189,7 @@ function isFallbackTab(newTab, callback)
     {
         if (chrome.runtime.lastError)
         {
-            error("Error retrieving window for tab :", chrome.runtime.lastError);
+            console.error(consolePrefix + "Error retrieving window for tab :", chrome.runtime.lastError);
             callback(false);
         }
 
@@ -274,7 +229,7 @@ function isFallbackTab(newTab, callback)
                         let group = groups.find(g => g.id === gid);
                         if (!group)
                         {
-                            error(`Group ${gid} not found.`);
+                            console.error(consolePrefix + `Group ${gid} not found.`);
                             continue;
                         }
                         if (!group.collapsed)
@@ -315,7 +270,7 @@ function registerListeners()
             if (isMouseInContentArea)
             {
                 let contentTab = sender.tab;
-                debug('Mouse entered contentTab', contentTab);
+                console.debug(consolePrefix + 'Mouse entered contentTab', contentTab);
 
                 // assuming we can't enter the content area of a tab that isn't the active tab...
                 if (contentTab)
@@ -326,12 +281,12 @@ function registerListeners()
                     }
                     else
                     {
-                        warn('Mouse entered content area of non-active tab!', contentTab);
+                        console.warn(consolePrefix + 'Mouse entered content area of non-active tab!', contentTab);
                     }
                 }
                 else
                 {
-                    warn('No sender tab for mouseInContentArea event');
+                    console.warn(consolePrefix + 'No sender tab for mouseInContentArea event');
                 }
             }
             sendResponse({ status: "ok" });
@@ -349,13 +304,13 @@ function registerListeners()
     {
         // is this getting run for new tabs before onCreated examines it?
         lastActiveTabIds[activeInfo.windowId] = activeInfo.tabId;
-        debug("onActivated updated lastActiveTabIds with tab id: ", activeInfo.tabId);
+        console.debug(consolePrefix + "onActivated updated lastActiveTabIds with tab id: ", activeInfo.tabId);
 
         isContentScriptActive(activeInfo.tabId).then((isInjected) =>
         {
             if (isInjected)
             {
-                log(`Activated tab ${activeInfo.tabId} already has content script injected`);
+                console.log(consolePrefix + `Activated tab ${activeInfo.tabId} already has content script injected`);
                 return;
             }
 
@@ -365,20 +320,20 @@ function registerListeners()
                 if (chrome.runtime.lastError)
                 {
                     // this tab doesn't support content scripting (e.g. about:blank, Google Web Store, browser settings, etc)
-                    warn("Error injecting content script into tab " + activeInfo.tabId + ": ", chrome.runtime.lastError.message);
+                    console.warn(consolePrefix + "Error injecting content script into tab " + activeInfo.tabId + ": ", chrome.runtime.lastError.message);
 
                     // instead we just collapse other groups after a timeout
                     chrome.tabs.get(activeInfo.tabId, (activeTab) =>
                     {
                         if (chrome.runtime.lastError)
                         {
-                            error("Failed to get activated tab " + activeInfo.tabId, chrome.runtime.lastError);
+                            console.error(consolePrefix + "Failed to get activated tab " + activeInfo.tabId, chrome.runtime.lastError);
                             return;
                         }
 
                         if (newlyCreatedTabs.has(activeTab.id))
                         {
-                            log("Ignoring first activation of newly created tab", activeTab.id)
+                            console.log(consolePrefix + "Ignoring first activation of newly created tab", activeTab.id)
                             newlyCreatedTabs.delete(activeTab.id);
                             return;
                         }
@@ -387,7 +342,7 @@ function registerListeners()
                 }
                 else
                 {
-                    log("Content script injected into activated tab", activeInfo.tabId);
+                    console.log(consolePrefix + "Content script injected into activated tab", activeInfo.tabId);
                 }
             });
         });
@@ -414,7 +369,7 @@ function registerListeners()
                 // if the tab wasn't made groupless
                 if (changeInfo.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
                 {
-                    log(`>>> Uninjected tab ${tabId} moved to group ${changeInfo.groupId}`);
+                    console.log(consolePrefix + `>>> Uninjected tab ${tabId} moved to group ${changeInfo.groupId}`);
 
                     // if the active tab is moved from an expanded group into a collapsed group, the new group will expand
                     // if the tab isn't the active tab, the new group will stay collapsed
@@ -423,7 +378,7 @@ function registerListeners()
                     {
                         if (chrome.runtime.lastError)
                         {
-                            error("Failed to get updated tab " + tabId, chrome.runtime.lastError);
+                            console.error(consolePrefix + "Failed to get updated tab " + tabId, chrome.runtime.lastError);
                             return;
                         }
 
@@ -433,7 +388,7 @@ function registerListeners()
                         }
                         else
                         {
-                            log("Updated tab is not the active tab.  Ignoring.");
+                            console.log(consolePrefix + "Updated tab is not the active tab.  Ignoring.");
                         }
                     });
                 }
@@ -452,7 +407,7 @@ function registerListeners()
         // we immediately grab this before onActivated runs for this tab and updates it with this tab ID
         let lastActiveTabId = lastActiveTabIds[newTab.windowId];
 
-        log(`>>> Tab created: ${newTab.id} in window ${newTab.windowId}`);
+        console.log(consolePrefix + `>>> Tab created: ${newTab.id} in window ${newTab.windowId}`);
 
         isContentScriptActive(newTab.id).then((isInjected) =>
         {
@@ -467,7 +422,7 @@ function registerListeners()
 
         if (newTab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
         {
-            log("New tab is already in a group.");
+            console.log(consolePrefix + "New tab is already in a group.");
             return;
         }
 
@@ -478,14 +433,14 @@ function registerListeners()
             {
                 if (chrome.runtime.lastError)
                 {
-                    error("Error 're-getting' tab:", chrome.runtime.lastError);
+                    console.error(consolePrefix + "Error 're-getting' tab:", chrome.runtime.lastError);
                     return;
                 }
 
                 // If tab has NOW been assigned a group, skip grouping
                 if (newTab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
                 {
-                    log(`Tab ${newTab.id} has been auto-grouped into group ${newTab.groupId} by browser or something else`);
+                    console.log(consolePrefix + `Tab ${newTab.id} has been auto-grouped into group ${newTab.groupId} by browser or something else`);
                     return;
                 }
 
@@ -496,7 +451,7 @@ function registerListeners()
                 {
                     if (isFallback)
                     {
-                        log("Ignoring fallback tab")
+                        console.log(consolePrefix + "Ignoring fallback tab")
                         return;
                     }
 
@@ -504,7 +459,7 @@ function registerListeners()
                     {
                         if (lastActiveTabId === newTab.id)
                         {
-                            warn("New tab is the also the last active tab in the window.");
+                            console.warn(consolePrefix + "New tab is the also the last active tab in the window.");
                             return;
                         }
 
@@ -513,13 +468,13 @@ function registerListeners()
                         {
                             if (chrome.runtime.lastError)
                             {
-                                error("Error retrieving tab: ", chrome.runtime.lastError);
+                                console.error(consolePrefix + "Error retrieving tab: ", chrome.runtime.lastError);
                                 return;
                             }
 
                             if (prevActiveTab && prevActiveTab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
                             {
-                                log(`Adding new tab (${newTab.id}) to group of last tab (${prevActiveTab.groupId})`);
+                                console.log(consolePrefix + `Adding new tab (${newTab.id}) to group of last tab (${prevActiveTab.groupId})`);
 
                                 // Add the new tab to the group of the last focused tab
                                 // NOTE: this will trigger the onUpdated event and therefore run collapseOtherGroups()
@@ -527,20 +482,20 @@ function registerListeners()
                                 {
                                     if (chrome.runtime.lastError)
                                     {
-                                        error("Error grouping new tab", chrome.runtime.lastError);
+                                        console.error(consolePrefix + "Error grouping new tab", chrome.runtime.lastError);
                                     }
                                 });
                             }
                             else
                             {
-                                log("No group found for last active tab " + prevActiveTab.id);
+                                console.log(consolePrefix + "No group found for last active tab " + prevActiveTab.id);
                             }
                         });
                     }
                     else
                     {
                         // maybe a brand new window.  just let the new tab be where it is
-                        log("No last focused tab found for window " + newTab.windowId);
+                        console.log(consolePrefix + "No last focused tab found for window " + newTab.windowId);
                     }
 
                 });
@@ -552,7 +507,7 @@ function registerListeners()
     });
 
     browserStartingUp = false;
-    log("Listeners registered");
+    console.log(consolePrefix + "Listeners registered");
 }
 
 
@@ -563,7 +518,7 @@ let browserStartingUp = false;
 chrome.runtime.onStartup.addListener(() =>
 {
     // Initialization code for startup scenarios
-    log("Browser is starting up.  Sleeping for " + listenDelayOnBrowserStartupMs + " ms before registering listeners.");
+    console.log(consolePrefix + "Browser is starting up.  Sleeping for " + listenDelayOnBrowserStartupMs + " ms before registering listeners.");
     browserStartingUp = true;
     setTimeout(registerListeners, listenDelayOnBrowserStartupMs);
 });
@@ -573,9 +528,9 @@ setTimeout(() =>
 {
     if (!browserStartingUp)
     {
-        log("Browser is NOT starting up.  Registering listeners now.");
+        console.log(consolePrefix + "Browser is NOT starting up.  Registering listeners now.");
         registerListeners();
     }
 }, onStartupWaitTimeoutMs);
 
-log("Extension loaded. Waiting for browser-based onStartup event for " + onStartupWaitTimeoutMs + " ms...");
+console.log(consolePrefix + "Extension loaded. Waiting for browser-based onStartup event for " + onStartupWaitTimeoutMs + " ms...");
