@@ -1,3 +1,5 @@
+// TabGroupsPlus
+
 // does this property of window get reset when the script is uninjected?
 if (!window.isInjected)
 {
@@ -14,10 +16,25 @@ if (!window.isInjected)
     function handleMouseEnter()
     {
         //console.log('[TabGroupsPlus] Mouse entered content area - sending message to background script');
-        chrome.runtime.sendMessage({ action: 'mouseInContentArea', value: true });
-    }
 
+        if (window.isInjected)
+        {
+            chrome.runtime.sendMessage({ action: 'mouseInContentArea', value: true });
+        }
+    }
     document.documentElement.addEventListener('mouseenter', handleMouseEnter);
+
+    // Function to handle mouseenter event
+    function handleMouseLeave()
+    {
+        //console.log('[TabGroupsPlus] Mouse left content area - sending message to background script');
+        if (window.isInjected)
+        {
+            chrome.runtime.sendMessage({ action: 'mouseInContentArea', value: false });
+        }
+    }
+    document.documentElement.addEventListener('mouseleave', handleMouseLeave);
+
 
     // handler for pings from background.js,
     // used to check whether the content script is hooked into the current tab
