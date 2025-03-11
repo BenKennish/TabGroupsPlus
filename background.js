@@ -1,12 +1,10 @@
 // TabGroupsPlus
-// background.js
-//
-// the content script cannot access certain tab contents, e.g. about:blank, Google Web Store, etc
+// background script (service worker)
 
-// FIXME: opening a closed (not collapsed, closed) group, e.g. from Bookmarks bar, seems
-// to open the tabs within the current tab
+// TODO: after collapsing, use chrome.tabGroups.move() to move all tab groups to the left of the active tab group
 
-// FIXME: right clicking an open tab group and clicking "Close Group" crashes browser!
+// FIXME: right clicking an open tab group and clicking "Close Group" sometimes crashes browser!
+
 
 // timeout for receiving the browser's onStartup event
 const onStartupWaitTimeoutMs = 500;
@@ -16,24 +14,24 @@ const listenDelayOnBrowserStartupMs = 10000;
 
 // time to wait after mouse cursor entering a tab's content area
 // before collapsing the other tab groups in the window
-const collapseDelayOnEnterContentAreaMs = 750;
+const collapseDelayOnEnterContentAreaMs = 2000;
 
 // time to wait after activating a tab without our content script injected
 // before collapsing the other tab groups in the window
 const collapseDelayOnActivateUninjectedTabMs = 4000;
 
 // time to wait after a new tab is created before checking its group
-// (because the browser may move the tab into a group automatically)
+// (the browser may move the tab into a group automatically very shortly after its creation)
 const checkGroupingDelayOnCreateTabMs = 100;
 
 // enable/disable debug console messages
-const showDebugConsoleMsgs = true;
+const showDebugConsoleMsgs = false;
 
 // Map to store collapse timers keyed by group id
 let collapseTimers = {};
 
 // Map to store last focused tab id by window id
-// (used when a new tab is created to then add it to the group of the previously focused tab)
+// (used when a new tab is created to then add it to the group of the previously active tab)
 let lastActiveTabIds = {};
 
 // hack to stop onActivated from stomping all over onCreated
@@ -42,21 +40,14 @@ let newlyCreatedTabs = new Set();
 // e.g. when the user middle-clicks a link to open it in a new tab
 // as then the next activated tab will not trigger any group collapsing
 
-// Console logging helpers
-
-if (!showDebugConsoleMsgs)
-{
-    console.debug = function () { };
-}
-
 // what we put before log lines to identify ourself
 const consolePrefix = "[TabGroupsPlus] ";
+
 
 // check if our content script has been injected on the given tab
 // content script cannot inject into certain content, e.g. about:blank, Google Web Store, browser settings, etc
 // promise returns true if the content script responds to a ping, false otherwise
 //
-// maybe this could be done better with an async function using await ?
 function isContentScriptActive(tabId)
 {
     return new Promise((resolve) =>
@@ -73,11 +64,33 @@ function isContentScriptActive(tabId)
 }
 
 
+// cancel any collapse timers set for tab groups of the supplied window ID
+//
+function cancelCollapses(windowId)
+{
+    const groupIds = Object.keys(collapseTimers);
+    groupIds.forEach((groupId) =>
+    {
+        const numericGroupId = parseInt(groupId, 10);
+
+        chrome.tabGroups.get(numericGroupId, (group) =>
+        {
+            if (!chrome.runtime.lastError && group && group.windowId === windowId)
+            {
+                clearTimeout(collapseTimers[groupId]);
+                delete collapseTimers[groupId];
+                console.log(`${consolePrefix}Cleared timer for group ${groupId} in window ${windowId}`);
+            }
+        });
+
+    });
+}
+
+
 // collapses all other tab groups in the window apart from the group of the supplied tab
+//
 function collapseOtherGroups(tab, delayMs)
 {
-    //lastActiveTabIds[tab.windowId] = tab.id;
-
     if (tab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE)
     {
         console.log(consolePrefix + `Tab ${tab.id}, window ${tab.windowId} is ungrouped. Skipping collapse of other groups.`);
@@ -85,7 +98,6 @@ function collapseOtherGroups(tab, delayMs)
     }
 
     console.debug(consolePrefix + `Tab ${tab.id}, window ${tab.windowId}, group ${tab.groupId} : looking for other groups to collapse...`);
-
 
     // fetch group of the tab
     chrome.tabGroups.get(tab.groupId, function (group)
@@ -145,6 +157,20 @@ function collapseOtherGroups(tab, delayMs)
                                 // e.g. dragging one around.  maybe we should we keep retrying?
                                 console.error(consolePrefix + "Failed to collapse group " + g.id, chrome.runtime.lastError);
                             }
+                            /*
+                            // here's some code that moves the collapsed tabs around.
+                            else
+                            {
+                                
+                                chrome.tabGroups.move(g.id, { index: -1 }, (movedGroup) => 
+                                {
+                                    if (chrome.runtime.lastError)
+                                    {
+                                        console.error(consolePrefix + "Failed to move collapsde group " + g.id, chrome.runtime.lastError);
+                                    }
+                                });
+                            }
+                            */
                         });
                         delete collapseTimers[g.id];
                     }, delayMs);
@@ -163,16 +189,19 @@ function collapseOtherGroups(tab, delayMs)
                 }
             });
 
-            console.log(consolePrefix + "Groups scheduled for collapse:", numCollapsedGroups);
+            if (numCollapsedGroups > 0)
+            {
+                console.log(consolePrefix + "Groups scheduled for collapse:", numCollapsedGroups);
+            }
         });
     });
 
 }
 
 
-
 // test to see if a new tab is (likely to be) a 'fallback' tab: a tab that was automatically created because the user
 // collapsed all tab groups in the window and there were no ungrouped tabs
+// also returns true if user just created a new window (with this single tab)
 //
 function isFallbackTab(newTab, callback)
 {
@@ -256,50 +285,54 @@ function isFallbackTab(newTab, callback)
     });
 }
 
-
+// register our listeners
+//
 function registerListeners()
 {
-
     // Listen for messages from content scripts
+    //
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
     {
-        if (message.action === 'mouseInContentArea')
+        switch (message.action)
         {
-            let isMouseInContentArea = message.value;
-
-            if (isMouseInContentArea)
-            {
+            case 'mouseInContentArea':
+                let isMouseInContentArea = message.value;
                 let contentTab = sender.tab;
-                console.debug(consolePrefix + 'Mouse entered contentTab', contentTab);
 
-                // assuming we can't enter the content area of a tab that isn't the active tab...
-                if (contentTab)
-                {
-                    if (contentTab.active)
-                    {
-                        collapseOtherGroups(contentTab, collapseDelayOnEnterContentAreaMs);
-                    }
-                    else
-                    {
-                        console.warn(consolePrefix + 'Mouse entered content area of non-active tab!', contentTab);
-                    }
-                }
-                else
+                if (!contentTab)
                 {
                     console.warn(consolePrefix + 'No sender tab for mouseInContentArea event');
                 }
-            }
-            sendResponse({ status: "ok" });
-        }
-        else
-        {
-            sendResponse({ status: "invalidAction" });
+                else if (!contentTab.active)
+                {
+                    console.warn(consolePrefix + 'Mouse entered/left content area of non-active tab!', contentTab);
+                }
+                else if (isMouseInContentArea)
+                {
+                    console.debug(consolePrefix + 'Mouse entered contentTab', contentTab);
+                    collapseOtherGroups(contentTab, collapseDelayOnEnterContentAreaMs);
+                }
+                else  // IsMouseInContentArea is false
+                {
+                    console.debug(consolePrefix + 'Mouse left contentTab', contentTab);
+
+                    // we cancel all the collapse operations in case they went back up to the tab list
+                    cancelCollapses(contentTab.windowId);
+                }
+                sendResponse({ status: "ok" });
+                break;
+
+            default:
+                console.error(consolePrefix + "Unexpected action from content script: '" + message.action + "'")
+                sendResponse({ status: "invalidAction" });
+
         }
 
     });
 
     // Listen for tab activation to schedule collapse of non-active groups
     // fallback if the content script cannot be injected into the tab contents
+    //
     chrome.tabs.onActivated.addListener((activeInfo) =>
     {
         // is this getting run for new tabs before onCreated examines it?
@@ -310,7 +343,7 @@ function registerListeners()
         {
             if (isInjected)
             {
-                console.log(consolePrefix + `Activated tab ${activeInfo.tabId} already has content script injected`);
+                console.log(`${consolePrefix}Activated tab ${activeInfo.tabId} already has content script injected`);
                 return;
             }
 
@@ -319,8 +352,22 @@ function registerListeners()
             {
                 if (chrome.runtime.lastError)
                 {
-                    // this tab doesn't support content scripting (e.g. about:blank, Google Web Store, browser settings, etc)
-                    console.warn(consolePrefix + "Error injecting content script into tab " + activeInfo.tabId + ": ", chrome.runtime.lastError.message);
+                    // this tab doesn't support content script (e.g. about:blank, Google Web Store, browser settings)
+                    switch (chrome.runtime.lastError.message)
+                    {
+                        // expected injection fails:
+                        case "Cannot access a chrome:// URL":
+                        case "The extensions gallery cannot be scripted.":
+                        case "Cannot access a chrome-extension:// URL of different extension":
+                        case "Extension manifest must request permission to access this host":
+                            // the last one tends to happen when a chrome:// URL tab is not yet loaded when activated
+
+                            console.warn(consolePrefix + "Expected error injecting into tab " + activeInfo.tabId + ":", chrome.runtime.lastError.message);
+                            break;
+                        // unexpected injection fails:
+                        default:
+                            console.error(consolePrefix + "Unexpected error injecting into tab " + activeInfo.tabId + ":", chrome.runtime.lastError.message);
+                    }
 
                     // instead we just collapse other groups after a timeout
                     chrome.tabs.get(activeInfo.tabId, (activeTab) =>
@@ -346,34 +393,39 @@ function registerListeners()
                 }
             });
         });
-
     });
 
 
     // Listen for when a tab is updated, in particular when moved into a new group
     // fallback if the content script cannot be injected into the tab contents
+    //
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) =>
     {
-        isContentScriptActive(tabId).then((isInjected) =>
+        // tab's group assignment was changed
+        if (changeInfo.hasOwnProperty('groupId'))
         {
-            if (isInjected)
+            isContentScriptActive(tabId).then((isInjected) =>
             {
-                // we don't need to take any action on update of a tab with the content script injected
-                // because the content script will collapse the tab groups on mouse entering the content area
-                return;
-            }
+                if (isInjected)
+                {
+                    console.log(`${consolePrefix}Injected tab ${tabId} moved to group ${changeInfo.groupId} - ignoring`)
+                    // we don't need to take any action on update of a tab with the content script injected
+                    // because the content script will collapse the tab groups on mouse entering the content area
+                    return;
+                }
 
-            // tab's group assignment was changed
-            if (changeInfo.hasOwnProperty('groupId'))
-            {
+                // non-injected tab..
+                //
                 // if the tab wasn't made groupless
                 if (changeInfo.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
                 {
                     console.log(consolePrefix + `>>> Uninjected tab ${tabId} moved to group ${changeInfo.groupId}`);
 
-                    // if the active tab is moved from an expanded group into a collapsed group, the new group will expand
-                    // if the tab isn't the active tab, the new group will stay collapsed
+                    // if a tab is moved from an expanded group into a collapsed group
+                    //   if the moved tab is the active tab, the new group will expand
+                    //   if the moved tab isn't the active tab, the new group will stay collapsed
 
+                    // fetch tab object
                     chrome.tabs.get(tabId, function (tab)
                     {
                         if (chrome.runtime.lastError)
@@ -388,12 +440,13 @@ function registerListeners()
                         }
                         else
                         {
-                            console.log(consolePrefix + "Updated tab is not the active tab.  Ignoring.");
+                            console.log(consolePrefix + "Regrouped tab is not the active tab.  Ignoring.");
                         }
                     });
                 }
-            }
-        });
+            });
+
+        };
     });
 
 
@@ -401,7 +454,7 @@ function registerListeners()
     //
     // note: if the user wants to create a new ungrouped tab on a window with only tab groups,
     // they can create the tab and then drag it outside the tab groups
-
+    //
     chrome.tabs.onCreated.addListener(function (newTab)
     {
         // we immediately grab this before onActivated runs for this tab and updates it with this tab ID
@@ -431,6 +484,8 @@ function registerListeners()
             // refetch the tab to check for updates
             chrome.tabs.get(newTab.id, function (newTab)
             {
+                // NOTE: newTab now refers to the newly fetched tab object, not the one received by the listener
+
                 if (chrome.runtime.lastError)
                 {
                     console.error(consolePrefix + "Error 're-getting' tab:", chrome.runtime.lastError);
@@ -443,7 +498,6 @@ function registerListeners()
                     console.log(consolePrefix + `Tab ${newTab.id} has been auto-grouped into group ${newTab.groupId} by browser or something else`);
                     return;
                 }
-
 
                 // when the user collapses all tab groups in a window in which there are no other tabs,
                 // the browser will auto create a new ungrouped 'fallback' tab which shouldn't be added to a tab group
@@ -510,6 +564,13 @@ function registerListeners()
     console.log(consolePrefix + "Listeners registered");
 }
 
+
+
+// Stop console.debug() working if we're not debugging
+if (!showDebugConsoleMsgs)
+{
+    console.debug = function () { };
+}
 
 let browserStartingUp = false;
 
