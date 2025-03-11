@@ -1,8 +1,14 @@
 {
     "manifest_version": 3,
     "name": "Tab Groups Plus",
-    "version": "0.90.0",
+    "short_name": "Tab Groups +",
+    "version": "1.0.0",
+    "version_name": "",
     "description": "Auto-collapses tab groups that don't contain that window's active tab, and adds new tabs to the currently active tab's group",
+    "author": "ben@kennish.net",
+    "icons": {
+        "128": "images/icon-128.png"
+    },
     "permissions": [
         "tabs",
         "tabGroups",
@@ -19,12 +25,16 @@
             "matches": [
                 "*://*/*"
             ],
+            //"match_about_blank": true,
+            "match_origin_as_fallback": true,
             "js": [
                 "content.js"
-            ]
+            ],
+            "run_at": "document_start"
         }
     ],
     "action": {
         "default_title": "Tab Groups Plus"
-    }
+    },
+    "minimum_chrome_version": "89"
 }
