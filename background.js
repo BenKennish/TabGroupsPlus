@@ -12,6 +12,28 @@ const onStartupWaitTimeoutMs = 500;
 // time to wait before listening for events if browser is starting up
 const listenDelayOnBrowserStartupMs = 10000;
 
+// time to wait after a new tab is created before checking its group
+// (the browser may move the tab into a group automatically very shortly after its creation)
+const checkGroupingDelayOnCreateTabMs = 100;
+
+// enable/disable debug console messages
+const showDebugConsoleMsgs = true;
+
+// constant object to fake an 'enum'
+const Align = Object.freeze({
+    LEFT: 'left',
+    RIGHT: 'right',
+    DISABLED: 'disabled'
+});
+
+// ===== settings that we will want to allow for easy configuration by the user ====
+
+// do we perform a collapse operation when the active tab is not in a group?
+const collapseOthersWithGrouplessTab = true;
+
+// valid values Align.LEFT, Align.RIGHT, or Align.DISABLED
+const alignTabGroupsAfterCollapsing = Align.LEFT;
+
 // time to wait after mouse cursor entering a tab's content area
 // before collapsing the other tab groups in the window
 const collapseDelayOnEnterContentAreaMs = 2000;
@@ -20,12 +42,7 @@ const collapseDelayOnEnterContentAreaMs = 2000;
 // before collapsing the other tab groups in the window
 const collapseDelayOnActivateUninjectedTabMs = 4000;
 
-// time to wait after a new tab is created before checking its group
-// (the browser may move the tab into a group automatically very shortly after its creation)
-const checkGroupingDelayOnCreateTabMs = 100;
-
-// enable/disable debug console messages
-const showDebugConsoleMsgs = false;
+// ================================
 
 // Map to store collapse timers keyed by group id
 let collapseTimers = {};
@@ -50,6 +67,7 @@ const consolePrefix = "[TabGroupsPlus] ";
 //
 function isContentScriptActive(tabId)
 {
+    // NB: no reject needed
     return new Promise((resolve) =>
     {
         chrome.tabs.sendMessage(tabId, { action: "ping" }, (response) =>
@@ -59,6 +77,59 @@ function isContentScriptActive(tabId)
                 resolve(false);
             }
             resolve(true);
+        });
+    });
+}
+
+
+// returns a promise to return an array of tab groups in a window
+// in the order that they are displayed
+//
+// FIXME: this won't properly preserve ordering because once a group is an active group,
+// it will be artificially the leftmost or rightmost group which shouldn't be the case
+// once it's no longer the active group
+//
+// to fix this, we'd need to remember the active tabs PREVIOUS index/position before the
+// shuffling, and then restore this for the next shuffle when it's not active anymore
+//
+function getTabGroupsOrdered(windowId, excludeId)
+{
+    return new Promise((resolve, reject) =>
+    {
+        // grab all the tabs in the window (will be sorted by left->right position)
+        chrome.tabs.query({ windowId: windowId }, function (tabs)
+        {
+            if (chrome.runtime.lastError)
+            {
+                reject(chrome.runtime.lastError);
+            }
+
+            const groupIdsOrdered = [];
+
+            tabs.forEach((tab) =>
+            {
+                if (tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE
+                    && tab.groupId !== excludeId
+                    && !groupIdsOrdered.includes(tab.groupId))
+                {
+                    // push group ID to array if it's a new one
+                    groupIdsOrdered.push(tab.groupId);
+                }
+            });
+
+            // now we need to create a list of groups in the same order as these IDs
+            Promise.all(
+                // creates a list of Promises that retrieve each specific tab group
+                groupIdsOrdered.map(id => chrome.tabGroups.get(id))
+            )
+                .then((groupsOrdered) =>
+                {
+                    resolve(groupsOrdered)
+                })
+                .catch((error) =>
+                {
+                    reject(error);
+                });
         });
     });
 }
@@ -87,113 +158,127 @@ function cancelCollapses(windowId)
 }
 
 
-// collapses all other tab groups in the window apart from the group of the supplied tab
+// collapses all other tab groups in the window apart from the group of the given "tab"
 //
 function collapseOtherGroups(tab, delayMs)
 {
     if (tab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE)
     {
-        console.log(consolePrefix + `Tab ${tab.id}, window ${tab.windowId} is ungrouped. Skipping collapse of other groups.`);
-        return;
+        if (!collapseOthersWithGrouplessTab)
+        {
+            console.log(consolePrefix + `Tab ${tab.id}, window ${tab.windowId} is ungrouped and collapseOthersWithGrouplessTab is false. Skipping collapse of other groups.`);
+            return;
+        }
+        console.log(consolePrefix + `Tab ${tab.id}, window ${tab.windowId}, group none. Collapsing all tab groups of the window...`);
+    }
+    else
+    {
+        console.log(consolePrefix + `Tab ${tab.id}, window ${tab.windowId}, group ${tab.groupId}. Collapsing all other tab groups of the window...`);
     }
 
-    console.debug(consolePrefix + `Tab ${tab.id}, window ${tab.windowId}, group ${tab.groupId} : looking for other groups to collapse...`);
-
-    // fetch group of the tab
-    chrome.tabGroups.get(tab.groupId, function (group)
+    // clear any pending operation timers on the current tab's group
+    // NB: getTabGroupsOrdered does not include the current tab
+    if (collapseTimers[tab.groupId])
     {
-        if (chrome.runtime.lastError)
+        clearTimeout(collapseTimers[tab.groupId]);
+        delete collapseTimers[tab.groupId];
+        console.debug(consolePrefix + "Cleared collapse timer for active group: " + tab.groupId);
+    }
+
+    // fetch the IDs of the groups in this window, in left-to-right appearance order
+    // excluding the given tab's group
+    getTabGroupsOrdered(tab.windowId, tab.groupId).then((groupsOrdered) =>
+    {
+        // when aligning them to the left, we need to process tab groups in reverse (right-to-left order)
+        if (alignTabGroupsAfterCollapsing == Align.LEFT)
         {
-            console.error(consolePrefix + "Failed to query group " + tab.groupId, chrome.runtime.lastError);
-            return;
+            // so reverse the group ordering
+            groupsOrdered.reverse();
         }
 
-        if (!group)
+        groupsOrdered.forEach(function (group)
         {
-            console.error(consolePrefix + "Failed to retrieve tab's group" + tab.groupId, group);
-            return;
-        }
+            console.log(consolePrefix + "Examining Group", group);
 
-        if (group.collapsed)
-        {
-            console.warn(consolePrefix + "Group of the tab is collapsed.  Bit unexpected.  Bailing out");
-            return;
-        }
-
-        // examine each tab group in this window
-        chrome.tabGroups.query({ windowId: tab.windowId }, function (groups)
-        {
-            if (chrome.runtime.lastError)
+            // cancel an old collapse operation if one is already scheduled
+            if (collapseTimers[group.id])
             {
-                console.error(consolePrefix + "Failed to query all groups for window " + tab.windowId, chrome.runtime.lastError);
-                return;
+                clearTimeout(collapseTimers[group.id]);
+                delete collapseTimers[group.id];
+                console.log(consolePrefix + "Cleared leftover collapse timer for group: " + group.id);
             }
 
-            let numCollapsedGroups = 0;
+            console.log(consolePrefix + `Scheduling operation for group ${group.id} in ${delayMs} ms...`);
 
-            // look for expanded tab groups in the current window
-            groups.forEach(function (g)
+            collapseTimers[group.id] = setTimeout(function ()
             {
-                // Don't collapse the active group or already collapsed groups
-                if (g.id !== tab.groupId && !g.collapsed)
+
+                if (!group.collapsed)
                 {
-                    // cancel an old collapse operation if already scheduled
-                    if (collapseTimers[g.id])
+                    console.log(consolePrefix + "Collapsing group " + group.id);
+                }
+
+                chrome.tabGroups.update(group.id, { collapsed: true }, function ()
+                {
+                    if (chrome.runtime.lastError)
                     {
-                        clearTimeout(collapseTimers[g.id]);
+                        // FIXME: fails if user is currently interacting with tabs,
+                        // e.g. dragging one around.  maybe we should we keep retrying?
+                        console.error(consolePrefix + "Failed to collapse group " + group.id, chrome.runtime.lastError);
                     }
-
-                    console.log(consolePrefix + `Scheduling collapse for group ${g.id} in ${delayMs} ms...`);
-                    numCollapsedGroups++;
-
-                    collapseTimers[g.id] = setTimeout(function ()
+                    else
                     {
-                        console.log(consolePrefix + "Collapsing group " + g.id);
-                        chrome.tabGroups.update(g.id, { collapsed: true }, function ()
+                        // FIXME: this is all done async and should be run strictly in order (with await?)
+                        // or else the alignment not be preserved
+
+                        // PROCESS:
+                        // given an array of groups
+                        // examining from rightmost group to leftmost (if Align.LEFT)
+                        // examining from leftmost group to rightmost (if Align.RIGHT)
+
+                        // iterate through the array moving each group to
+                        // start, index pos 1 (if Align.LEFT)
+                        // end,   index pos -1 (if Align.RIGHT)
+
+                        if (alignTabGroupsAfterCollapsing !== Align.DISABLED)
                         {
-                            if (chrome.runtime.lastError)
+                            switch (alignTabGroupsAfterCollapsing)
                             {
-                                // FIXME: fails if user is currently interacting with tabs,
-                                // e.g. dragging one around.  maybe we should we keep retrying?
-                                console.error(consolePrefix + "Failed to collapse group " + g.id, chrome.runtime.lastError);
+                                case Align.LEFT:
+                                    indexToMoveTo = 0;
+                                    break;
+
+                                case Align.RIGHT:
+                                    indexToMoveTo = -1;
+                                    break;
+
+                                default:
+                                    console.error("Bad value for alignTabGroupsAfterCollapsing:", alignTabGroupsAfterCollapsing);
+                                    return;
+                                    break;
                             }
-                            /*
-                            // here's some code that moves the collapsed tabs around.
-                            else
+
+                            // move each group to the start/end
+                            chrome.tabGroups.move(group.id, { index: indexToMoveTo }, (movedGroup) =>
                             {
-                                
-                                chrome.tabGroups.move(g.id, { index: -1 }, (movedGroup) => 
+                                if (chrome.runtime.lastError)
                                 {
-                                    if (chrome.runtime.lastError)
-                                    {
-                                        console.error(consolePrefix + "Failed to move collapsde group " + g.id, chrome.runtime.lastError);
-                                    }
-                                });
-                            }
-                            */
-                        });
-                        delete collapseTimers[g.id];
-                    }, delayMs);
-                }
-                else
-                {
-                    // this is the tab's group or an already collapsed group
-                    // cancel any collapse operations that are already scheduled
+                                    console.error(consolePrefix + "Failed to move group " + group.id, chrome.runtime.lastError);
+                                }
+                            });
 
-                    if (collapseTimers[g.id])
-                    {
-                        clearTimeout(collapseTimers[g.id]);
-                        delete collapseTimers[g.id];
-                        console.debug(consolePrefix + "Cleared collapse timer for active/collapsed group: " + group.id);
+                        }
+                        // else no moving/re-ordering
                     }
-                }
-            });
+                });
 
-            if (numCollapsedGroups > 0)
-            {
-                console.log(consolePrefix + "Groups scheduled for collapse:", numCollapsedGroups);
-            }
+                // delete the timer as it's now finished running
+                delete collapseTimers[group.id];
+
+            }, delayMs);
+
         });
+
     });
 
 }
@@ -421,10 +506,6 @@ function registerListeners()
                 {
                     console.log(consolePrefix + `>>> Uninjected tab ${tabId} moved to group ${changeInfo.groupId}`);
 
-                    // if a tab is moved from an expanded group into a collapsed group
-                    //   if the moved tab is the active tab, the new group will expand
-                    //   if the moved tab isn't the active tab, the new group will stay collapsed
-
                     // fetch tab object
                     chrome.tabs.get(tabId, function (tab)
                     {
@@ -434,6 +515,9 @@ function registerListeners()
                             return;
                         }
 
+                        // if a tab is moved into a collapsed group
+                        //   if the moved tab is the active tab, the browser will automatically expand the group
+                        //   if the moved tab isn't the active tab, the new group will stay collapsed
                         if (tab.active)
                         {
                             collapseOtherGroups(tab, collapseDelayOnActivateUninjectedTabMs);
