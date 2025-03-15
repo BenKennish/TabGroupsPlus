@@ -44,8 +44,8 @@ const autoGroupNewTabs = true;
 
 // ================================
 
-// Map to store collapse timers keyed by group id
-let collapseTimers = {};
+// Map to store collapse/align operation timers by window id
+let windowActionTimers = {};
 
 // Map to store last focused tab id by window id
 // (used when a new tab is created to then add it to the group of the previously active tab)
@@ -57,8 +57,21 @@ let newlyCreatedTabs = new Set();
 // e.g. when the user middle-clicks a link to open it in a new tab
 // as then the next activated tab will not trigger any group collapsing
 
+
+// Map to store previous "group index" position of an active group within its window
+// this index (0+) represents ordering from left-to-right considering groups only
+// it's not like tab index
+let activeGroupsPrevPos = {};
+// e.g. activeGroupsPrevPos[42] = 2
+// states that group #42 used to be in group index pos 2 (of the window that it's in)
+
 // what we put before log lines to identify ourself
 const consolePrefix = "[TabGroupsPlus] ";
+
+
+// ============================================================================
+// ============================================================================
+// ============================================================================
 
 
 // check if our content script has been injected on the given tab
@@ -83,14 +96,7 @@ function isContentScriptActive(tabId)
 
 
 // returns a promise to return an array of tab groups in a window
-// in the order that they are displayed
-//
-// FIXME: this won't properly preserve ordering because once a group is an active group,
-// it will be artificially the leftmost or rightmost group which shouldn't be the case
-// once it's no longer the active group
-//
-// to fix this, we'd need to remember the active tabs PREVIOUS index/position before the
-// shuffling, and then restore this for the next shuffle when it's not active anymore
+// in the order that they are displayed, excluding the group with ID 'excludeId'
 //
 function getTabGroupsOrdered(windowId, excludeId)
 {
@@ -106,16 +112,35 @@ function getTabGroupsOrdered(windowId, excludeId)
 
             const groupIdsOrdered = [];
 
+            let groupIndex = 0;
+
             tabs.forEach((tab) =>
             {
-                if (tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE
-                    && tab.groupId !== excludeId
-                    && !groupIdsOrdered.includes(tab.groupId))
+                if (tab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE)
                 {
+                    // ungrouped tab. ignore
+                }
+                else if (excludeId === tab.groupId)
+                {
+                    // this is the 'excludeId' group, i.e. the one that contains the active tab
+                    // this group may soon be moved to leftmost/rightmost position
+                    // so we save the group index here
+
+                    console.warn(`${consolePrefix}Storing group ${tab.groupId} as being in group index ${groupIndex}`);
+                    activeGroupsPrevPos[tab.groupId] = groupIndex;
+                    groupIndex++;
+                }
+                else if (!groupIdsOrdered.includes(tab.groupId))
+                {
+                    // could optimise by just checking the last element in groupIdsOrdered
+                    // but .includes seems safer
+
                     // push group ID to array if it's a new one
                     groupIdsOrdered.push(tab.groupId);
+                    groupIndex++;
                 }
             });
+
 
             // now we need to create a list of groups in the same order as these IDs
             Promise.all(
@@ -139,29 +164,142 @@ function getTabGroupsOrdered(windowId, excludeId)
 //
 function cancelCollapses(windowId)
 {
-    const groupIds = Object.keys(collapseTimers);
-    groupIds.forEach((groupId) =>
-    {
-        const numericGroupId = parseInt(groupId, 10);
+    clearTimeout(windowActionTimers[windowId]);
+    delete windowActionTimers[windowId];
+    console.log(`${consolePrefix}Cleared action timer for window ${windowId}`);
+}
 
-        chrome.tabGroups.get(numericGroupId, (group) =>
+
+
+async function getFirstTabIndexInGroup(group)
+{
+    try
+    {
+        // Query all tabs in the specified group
+        const tabs = await chrome.tabs.query({ groupId: group.id });
+
+        if (tabs.length === 0)
         {
-            if (!chrome.runtime.lastError && group && group.windowId === windowId)
+            console.warn("No tabs found in group", group);
+            return null;
+        }
+
+        // Find the tab with the minimum index
+        const firstTab = tabs.reduce((minTab, currentTab) =>
+        {
+            return (currentTab.index < minTab.index) ? currentTab : minTab;
+        });
+        return firstTab.index;
+    }
+    catch (error)
+    {
+        console.error(`Error querying tabs: ${error}`);
+        return null;
+    }
+}
+
+
+
+
+// helper function for the main collapseOtherGroups() function
+async function collapseAndMoveGroups(groups)
+{
+    for (const group of groups)
+    {
+        console.log(consolePrefix + "Preparing to collapse/move group", group);
+
+        if (!group.collapsed)
+        {
+            console.log(consolePrefix + "Collapsing group " + group.id);
+        }
+
+        // Collapse group (wrapped as a Promise)
+        await new Promise((resolve) =>
+        {
+            chrome.tabGroups.update(group.id, { collapsed: true }, function ()
             {
-                clearTimeout(collapseTimers[groupId]);
-                delete collapseTimers[groupId];
-                console.log(`${consolePrefix}Cleared timer for group ${groupId} in window ${windowId}`);
-            }
+                if (chrome.runtime.lastError)
+                {
+                    console.error(consolePrefix + "Failed to collapse group " + group.id, chrome.runtime.lastError);
+                }
+                resolve();
+            });
         });
 
-    });
+        // If needed, move the group after collapsing
+        if (alignTabGroupsAfterCollapsing !== Align.DISABLED)
+        {
+            let indexToMoveTo = null;
+
+            // if this was the previously active group...
+            // this may not work unless this is the last `group` in `groups`
+            if (activeGroupsPrevPos[group.id] > 0)
+            {
+                let groupPreviousIndex = activeGroupsPrevPos[group.id];
+
+                console.log(consolePrefix + "Group " + group.id + " was previously active and at group index " + groupPreviousIndex);
+
+                // fetch updated group ordering, not excluding any tab
+                const groupsOrdered = await getTabGroupsOrdered(group.windowId, null);
+
+
+                if (groupsOrdered[groupPreviousIndex])
+                {
+                    // there's a group where we want to move the
+                    console.log(consolePrefix + "Moving it to where this group is ", groupsOrdered[groupPreviousIndex]);
+                    // fetch the index of the first tab of the group that's currently at this position
+                    indexToMoveTo = await getFirstTabIndexInGroup(groupsOrdered[groupPreviousIndex]);
+                }
+                else
+                {
+                    console.error(consolePrefix + "No group currently at this location!")
+                }
+                delete activeGroupsPrevPos[group.id];
+            }
+            else
+            {
+                switch (alignTabGroupsAfterCollapsing)
+                {
+                    case Align.LEFT:
+                        indexToMoveTo = 0;
+                        break;
+                    case Align.RIGHT:
+                        indexToMoveTo = -1;
+                        break;
+                    default:
+                        console.error("Bad value for alignTabGroupsAfterCollapsing:", alignTabGroupsAfterCollapsing);
+                        continue;
+                }
+            }
+
+            if (indexToMoveTo !== null)
+            {
+                await new Promise((resolve) =>
+                {
+                    chrome.tabGroups.move(group.id, { index: indexToMoveTo }, (movedGroup) =>
+                    {
+                        if (chrome.runtime.lastError)
+                        {
+                            console.error(consolePrefix + "Failed to move group " + group.id, chrome.runtime.lastError);
+                        }
+                        resolve();
+                    });
+                });
+            }
+        }
+    }
+
 }
+
 
 
 // collapses all other tab groups in the window apart from the group of the given "tab"
 //
 function collapseOtherGroups(tab, delayMs)
 {
+    // as things stand, tab is active but the other groups have not been collapsed
+    // nor has this active tab's group been moved around
+
     if (tab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE)
     {
         if (!collapseOthersWithGrouplessTab)
@@ -176,14 +314,14 @@ function collapseOtherGroups(tab, delayMs)
         console.log(consolePrefix + `Tab ${tab.id}, window ${tab.windowId}, group ${tab.groupId}. Collapsing all other tab groups of the window...`);
     }
 
-    // clear any pending operation timers on the current tab's group
-    // NB: getTabGroupsOrdered does not include the current tab
-    if (collapseTimers[tab.groupId])
+    // clear any pending operation timers on the current tab's window
+    if (windowActionTimers[tab.windowId])
     {
-        clearTimeout(collapseTimers[tab.groupId]);
-        delete collapseTimers[tab.groupId];
-        console.debug(consolePrefix + "Cleared collapse timer for active group: " + tab.groupId);
+        clearTimeout(windowActionTimers[tab.groupId]);
+        delete windowActionTimers[tab.groupId];
+        console.debug(consolePrefix + "Cleared action timer for window: " + tab.windowId);
     }
+
 
     // fetch the IDs of the groups in this window, in left-to-right appearance order
     // excluding the given tab's group
@@ -196,92 +334,31 @@ function collapseOtherGroups(tab, delayMs)
             groupsOrdered.reverse();
         }
 
-        groupsOrdered.forEach(function (group)
+        // cancel an old action timer if one is already scheduled
+        if (windowActionTimers[tab.windowId])
         {
-            console.log(consolePrefix + "Examining Group", group);
+            clearTimeout(windowActionTimers[tab.windowId]);
+            delete windowActionTimers[tab.windowId];
+            console.log(consolePrefix + "Cleared leftover window action timer for window: " + tab.windowId);
+        }
 
-            // cancel an old collapse operation if one is already scheduled
-            if (collapseTimers[group.id])
-            {
-                clearTimeout(collapseTimers[group.id]);
-                delete collapseTimers[group.id];
-                console.log(consolePrefix + "Cleared leftover collapse timer for group: " + group.id);
-            }
+        console.log(consolePrefix + `Scheduling action timer for window ${tab.windowId} in ${delayMs} ms...`);
 
-            console.log(consolePrefix + `Scheduling operation for group ${group.id} in ${delayMs} ms...`);
+        windowActionTimers[tab.windowId] = setTimeout(async function ()
+        {
+            console.log("Action timer for window " + tab.windowId + " running");
+            console.log("groupsOrdered", groupsOrdered);
 
-            collapseTimers[group.id] = setTimeout(function ()
-            {
+            await collapseAndMoveGroups(groupsOrdered);
 
-                if (!group.collapsed)
-                {
-                    console.log(consolePrefix + "Collapsing group " + group.id);
-                }
+            // delete the timer as it's now finished running
+            delete windowActionTimers[tab.windowId];
 
-                chrome.tabGroups.update(group.id, { collapsed: true }, function ()
-                {
-                    if (chrome.runtime.lastError)
-                    {
-                        // FIXME: fails if user is currently interacting with tabs,
-                        // e.g. dragging one around.  maybe we should we keep retrying?
-                        console.error(consolePrefix + "Failed to collapse group " + group.id, chrome.runtime.lastError);
-                    }
-                    else
-                    {
-                        // FIXME: this is all done async and should be run strictly in order (with await?)
-                        // or else the alignment not be preserved
-
-                        // PROCESS:
-                        // given an array of groups
-                        // examining from rightmost group to leftmost (if Align.LEFT)
-                        // examining from leftmost group to rightmost (if Align.RIGHT)
-
-                        // iterate through the array moving each group to
-                        // start, index pos 1 (if Align.LEFT)
-                        // end,   index pos -1 (if Align.RIGHT)
-
-                        if (alignTabGroupsAfterCollapsing !== Align.DISABLED)
-                        {
-                            switch (alignTabGroupsAfterCollapsing)
-                            {
-                                case Align.LEFT:
-                                    indexToMoveTo = 0;
-                                    break;
-
-                                case Align.RIGHT:
-                                    indexToMoveTo = -1;
-                                    break;
-
-                                default:
-                                    console.error("Bad value for alignTabGroupsAfterCollapsing:", alignTabGroupsAfterCollapsing);
-                                    return;
-                                    break;
-                            }
-
-                            // move each group to the start/end
-                            chrome.tabGroups.move(group.id, { index: indexToMoveTo }, (movedGroup) =>
-                            {
-                                if (chrome.runtime.lastError)
-                                {
-                                    console.error(consolePrefix + "Failed to move group " + group.id, chrome.runtime.lastError);
-                                }
-                            });
-
-                        }
-                        // else no moving/re-ordering
-                    }
-                });
-
-                // delete the timer as it's now finished running
-                delete collapseTimers[group.id];
-
-            }, delayMs);
-
-        });
-
+        }, delayMs);
     });
 
 }
+
 
 
 // test to see if a new tab is (likely to be) a 'fallback' tab: a tab that was automatically created because the user
@@ -420,8 +497,8 @@ function registerListeners()
     //
     chrome.tabs.onActivated.addListener((activeInfo) =>
     {
-        // is this getting run for new tabs before onCreated examines it?
         lastActiveTabIds[activeInfo.windowId] = activeInfo.tabId;
+
         console.debug(consolePrefix + "onActivated updated lastActiveTabIds with tab id: ", activeInfo.tabId);
 
         isContentScriptActive(activeInfo.tabId).then((isInjected) =>
