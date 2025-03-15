@@ -1,10 +1,7 @@
 // TabGroupsPlus
 // background script (service worker)
 
-// TODO: after collapsing, use chrome.tabGroups.move() to move all tab groups to the left of the active tab group
-
 // FIXME: right clicking an open tab group and clicking "Close Group" sometimes crashes browser!
-
 
 // timeout for receiving the browser's onStartup event
 const onStartupWaitTimeoutMs = 500;
@@ -41,6 +38,9 @@ const collapseDelayOnEnterContentAreaMs = 2000;
 // time to wait after activating a tab without our content script injected
 // before collapsing the other tab groups in the window
 const collapseDelayOnActivateUninjectedTabMs = 4000;
+
+// do we auto group new tabs into the same group as the previously active tab?
+const autoGroupNewTabs = true;
 
 // ================================
 
@@ -543,6 +543,11 @@ function registerListeners()
     {
         // we immediately grab this before onActivated runs for this tab and updates it with this tab ID
         let lastActiveTabId = lastActiveTabIds[newTab.windowId];
+
+        if (!autoGroupNewTabs)
+        {
+            return;
+        }
 
         console.log(consolePrefix + `>>> Tab created: ${newTab.id} in window ${newTab.windowId}`);
 

@@ -9,7 +9,7 @@ if (!window.isInjected)
     // Function to handle mouseenter event
     function handleMouseEnter()
     {
-        //console.log('[TabGroupsPlus] Mouse entered content area - sending message to background script');
+        //console.debug('[TabGroupsPlus] Mouse entered content area - sending message to background script');
 
         if (window.isInjected)
         {
@@ -21,7 +21,7 @@ if (!window.isInjected)
     // Function to handle mouseenter event
     function handleMouseLeave()
     {
-        //console.log('[TabGroupsPlus] Mouse left content area - sending message to background script');
+        //console.debug('[TabGroupsPlus] Mouse left content area - sending message to background script');
         if (window.isInjected)
         {
             chrome.runtime.sendMessage({ action: 'mouseInContentArea', value: false });
