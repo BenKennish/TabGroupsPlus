@@ -17,10 +17,11 @@ const checkGroupingDelayOnCreateTabMs = 100;
 const showDebugConsoleMsgs = true;
 
 // constant object to fake an 'enum'
+// the numbers conveniently match the locations to move groups to
 const Align = Object.freeze({
-    LEFT: 'left',
-    RIGHT: 'right',
-    DISABLED: 'disabled'
+    LEFT: 0,
+    RIGHT: -1,
+    DISABLED: 1
 });
 
 // ===== settings that we will want to allow for easy configuration by the user ====
@@ -113,32 +114,39 @@ function getTabGroupsOrdered(windowId, excludeId)
             const groupIdsOrdered = [];
 
             let groupIndex = 0;
+            let seenExcluded = false;
 
             tabs.forEach((tab) =>
             {
                 if (tab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE)
                 {
-                    // ungrouped tab. ignore
+                    // ungrouped tab
+                    return; // process next tab
                 }
-                else if (excludeId === tab.groupId)
+
+                if (null !== excludeId && tab.groupId == excludeId)
                 {
                     // this is the 'excludeId' group, i.e. the one that contains the active tab
                     // this group may soon be moved to leftmost/rightmost position
                     // so we save the group index here
-
-                    console.warn(`${consolePrefix}Storing group ${tab.groupId} as being in group index ${groupIndex}`);
-                    activeGroupsPrevPos[tab.groupId] = groupIndex;
-                    groupIndex++;
+                    if (!seenExcluded)
+                    {
+                        console.warn(`${consolePrefix}Storing group ${tab.groupId} as having group index ${groupIndex}`);
+                        activeGroupsPrevPos[tab.groupId] = groupIndex;
+                        groupIndex++;
+                        seenExcluded = true;
+                    }
+                    return;  // process next tab
                 }
-                else if (!groupIdsOrdered.includes(tab.groupId))
-                {
-                    // could optimise by just checking the last element in groupIdsOrdered
-                    // but .includes seems safer
 
-                    // push group ID to array if it's a new one
+                if (!groupIdsOrdered.includes(tab.groupId))
+                {
+                    console.warn(`${consolePrefix}Storing group ${tab.groupId} into groupIdsOrdered`);
+                    // if we haven't yet got this group ID, add it to list
                     groupIdsOrdered.push(tab.groupId);
                     groupIndex++;
                 }
+
             });
 
 
@@ -231,9 +239,9 @@ async function collapseAndMoveGroups(groups)
         {
             let indexToMoveTo = null;
 
-            // if this was the previously active group...
-            // this may not work unless this is the last `group` in `groups`
-            if (activeGroupsPrevPos[group.id] > 0)
+            // if this was the previously active group,
+            // we want to put it back where it was
+            if (activeGroupsPrevPos[group.id])
             {
                 let groupPreviousIndex = activeGroupsPrevPos[group.id];
 
@@ -246,13 +254,14 @@ async function collapseAndMoveGroups(groups)
                 if (groupsOrdered[groupPreviousIndex])
                 {
                     // there's a group where we want to move the
-                    console.log(consolePrefix + "Moving it to where this group is ", groupsOrdered[groupPreviousIndex]);
+                    console.warn(consolePrefix + "Moving it to where this group is ", groupsOrdered[groupPreviousIndex]);
                     // fetch the index of the first tab of the group that's currently at this position
                     indexToMoveTo = await getFirstTabIndexInGroup(groupsOrdered[groupPreviousIndex]);
                 }
                 else
                 {
                     console.error(consolePrefix + "No group currently at this location!")
+                    indexToMoveTo = alignTabGroupsAfterCollapsing;
                 }
                 delete activeGroupsPrevPos[group.id];
             }
@@ -285,6 +294,10 @@ async function collapseAndMoveGroups(groups)
                         resolve();
                     });
                 });
+            }
+            else
+            {
+                console.error(consolePrefix + "Didn't move group as no index decided upon");
             }
         }
     }
@@ -319,14 +332,18 @@ function collapseOtherGroups(tab, delayMs)
     {
         clearTimeout(windowActionTimers[tab.groupId]);
         delete windowActionTimers[tab.groupId];
-        console.debug(consolePrefix + "Cleared action timer for window: " + tab.windowId);
+        console.debug(consolePrefix + "Cleared action timer for window", tab.windowId);
     }
 
+
+    console.log(consolePrefix + "Retrieving ordered tab groups....");
 
     // fetch the IDs of the groups in this window, in left-to-right appearance order
     // excluding the given tab's group
     getTabGroupsOrdered(tab.windowId, tab.groupId).then((groupsOrdered) =>
     {
+        console.log(consolePrefix + "Retrieved ordered tab groups", groupsOrdered);
+
         // when aligning them to the left, we need to process tab groups in reverse (right-to-left order)
         if (alignTabGroupsAfterCollapsing == Align.LEFT)
         {
