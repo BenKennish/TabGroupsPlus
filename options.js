@@ -16,10 +16,9 @@ document.addEventListener('DOMContentLoaded', function ()
     });
 
     // Save options when the form is submitted
-    document.getElementById('options-form').addEventListener('submit', function (e)
+    document.getElementById('options-form').addEventListener('submit', (event) =>
     {
-        e.preventDefault();
-
+        event.preventDefault();
 
         let optionsToSave = {
             collapseOthersWithGrouplessTab: document.getElementById('collapseOthersWithGrouplessTab').checked,
@@ -31,9 +30,17 @@ document.addEventListener('DOMContentLoaded', function ()
             autoGroupNewTabs: document.getElementById('autoGroupNewTabs').checked
         }
 
-        chrome.storage.sync.set(optionsToSave, function ()
+        chrome.storage.sync.set(optionsToSave, () =>
         {
             // background.js has a listener for the storage being updated so we don't need to do anything here
+            window.close();
         });
+    });
+
+    // Close window when cancel button clicked
+    document.getElementById('cancel').addEventListener('click', (event) =>
+    {
+        event.preventDefault();
+        window.close();
     });
 });

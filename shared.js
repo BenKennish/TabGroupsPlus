@@ -1,4 +1,5 @@
-// stuff that's shared between background.js, content.js, and/or options.js
+// Tab Groups Plus
+// module of stuff that's shared between background.js, content.js, and/or options.js
 
 // constant object to fake an 'enum'
 // the numbers for LEFT and RIGHT conveniently match the tab index locations

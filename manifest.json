@@ -2,36 +2,37 @@
     "manifest_version": 3,
     "name": "Tab Groups Plus",
     "short_name": "Tab Groups +",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "version_name": "",
-    "description": "Auto-collapses tab groups that don't contain that window's active tab, and adds new tabs to the currently active tab's group",
+    "description": "Auto-collapses tab groups that don't contain that window's active tab, and adds new tabs to the currently active tab's group", // max 132 chars
     "author": "ben@kennish.net",
+    "homepage_url": "https://github.com/BenKennish/TabGroupsPlus",
     "icons": {
         "128": "images/icon-128.png"
     },
     "permissions": [
+        // we don't need to use 'scripting' if we disable script injection
         "tabGroups",
-        "scripting",
-        "storage"
+        "storage",
+        "scripting"
+    ],
+    // we don't need to use 'host_permissions' if we disable script injection
+    "host_permissions": [
+        "<all_urls>"
     ],
     "background": {
         "service_worker": "background.js",
         "type": "module"
     },
-    "host_permissions": [
-        "*://*/*"
-    ],
     "content_scripts": [
         {
             "matches": [
-                "*://*/*"
+                "<all_urls>" // used to be "*://*/*"
             ],
             "js": [
                 "content.js"
             ],
-            "run_at": "document_start",
-            "match_origin_as_fallback": true,
-            "match_about_blank": true
+            "run_at": "document_start"
         }
     ],
     "options_ui": {
@@ -41,5 +42,6 @@
     "action": {
         "default_title": "Tab Groups Plus"
     },
-    "minimum_chrome_version": "89"
+    "incognito": "split",
+    "minimum_chrome_version": "89" //checked with Copilot
 }

@@ -1,7 +1,6 @@
-// TabGroupsPlus
+// Tab Groups Plus
 // content script
 
-// does this property of window get reset when the script is uninjected?
 if (!window.isInjected)
 {
     window.isInjected = true;
@@ -10,10 +9,9 @@ if (!window.isInjected)
     function handleMouseEnter()
     {
         //console.debug('[TabGroupsPlus] Mouse entered content area - sending message to background script');
-
         if (window.isInjected)
         {
-            chrome.runtime.sendMessage({ action: 'mouseInContentArea', value: true });
+            chrome.runtime.sendMessage({ action: 'mouseInContentArea', value: true });  // extension context invalidated occurs here
         }
     }
     document.documentElement.addEventListener('mouseenter', handleMouseEnter);
@@ -24,7 +22,7 @@ if (!window.isInjected)
         //console.debug('[TabGroupsPlus] Mouse left content area - sending message to background script');
         if (window.isInjected)
         {
-            chrome.runtime.sendMessage({ action: 'mouseInContentArea', value: false });
+            chrome.runtime.sendMessage({ action: 'mouseInContentArea', value: false });  // extension context invalidated occurs here
         }
     }
     document.documentElement.addEventListener('mouseleave', handleMouseLeave);
@@ -41,6 +39,7 @@ if (!window.isInjected)
     }
     chrome.runtime.onMessage.addListener(pingHandler);
 
+
     window.addEventListener('beforeunload', () =>
     {
         // clean up just before window is unloaded
@@ -48,6 +47,7 @@ if (!window.isInjected)
         document.documentElement.removeEventListener('mouseenter', handleMouseEnter);
         document.documentElement.removeEventListener('mouseleave', handleMouseLeave);
         chrome.runtime.onMessage.removeListener(pingHandler);
+        console.log('[TabGroupsPlus] listeners removed');
     });
 
     console.log('[TabGroupsPlus] Content script loaded');
