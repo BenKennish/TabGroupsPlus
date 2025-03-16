@@ -1,38 +1,69 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <title>Tab Group Plus Options</title>
+    <style>
+        /* Container for the form */
+        .options-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Row containing description and input */
+        .form-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Label styling */
+        .form-label {
+            width: 300px;
+        }
+
+        /* Input styling */
+        .form-input {
+            flex-grow: 1;
+        }
+    </style>
 </head>
 
 <body>
     <h1>Options</h1>
     <form id="options-form">
-
-        <label for="collapseOthersWithGrouplessTab">Collapse all groups on activating groupless tab?</label>
-        <input type="checkbox" id="collapseOthersWithGrouplessTab" name="collapseOthersWithGrouplessTab">
-        <br>
-
-        <label for="alignTabGroupsAfterCollapsing">Align tab groups after collapsing:</label>
-        <select id="alignTabGroupsAfterCollapsing" name="alignTabGroupsAfterCollapsing">
-            <option value="0">Left</option>
-            <option value="-1">Right</option>
-            <option value="69">Disabled</option>
-        </select>
-        <br>
-
-        <label for="collapseDelayOnEnterContentAreaMs">Collapse delay on entering a tab's content area:</label>
-        <input type="number" id="collapseDelayOnEnterContentAreaMs" name="collapseDelayOnEnterContentAreaMs">
-        <br>
-
-        <label for="collapseDelayOnActivateUninjectedTabMs">Collapse delay on activated a system tab:</label>
-        <input type="number" id="collapseDelayOnActivateUninjectedTabMs" name="collapseDelayOnActivateUninjectedTabMs">
-        <br>
-
-        <label for="autoGroupNewTabs">Auto group new tabs into same group as active tab?</label>
-        <input type="checkbox" id="autoGroupNewTabs" name="autoGroupNewTabs">
-        <br>
+        <div class="form-row">
+            <label for="collapseOthersWithGrouplessTab" class="form-label">Collapse all groups on activating groupless
+                tab?</label>
+            <input type="checkbox" id="collapseOthersWithGrouplessTab" name="collapseOthersWithGrouplessTab"
+                class="form-input">
+        </div>
+        <div class="form-row">
+            <label for="alignTabGroupsAfterCollapsing" class="form-label">Align tab groups after collapsing:</label>
+            <select id="alignTabGroupsAfterCollapsing" name="alignTabGroupsAfterCollapsing" class="form-input">
+                <option value="0">Left</option>
+                <option value="-1">Right</option>
+                <option value="69">Disabled</option>
+            </select>
+        </div>
+        <div class="form-row">
+            <label for="collapseDelayOnEnterContentAreaMs" class="form-label">Collapse delay on entering a tab's content
+                area (ms):</label>
+            <input type="number" id="collapseDelayOnEnterContentAreaMs" name="collapseDelayOnEnterContentAreaMs"
+                class="form-input" style="width: 50px;">
+        </div>
+        <div class="form-row">
+            <label for="collapseDelayOnActivateUninjectedTabMs" class="form-label">Collapse delay on activated a system
+                tab (ms):</label>
+            <input type="number" id="collapseDelayOnActivateUninjectedTabMs"
+                name="collapseDelayOnActivateUninjectedTabMs" class="form-input" style="width: 50px;">
+        </div>
+        <div class="form-row">
+            <label for="autoGroupNewTabs" class="form-label">Auto group new tabs into same group as active tab?</label>
+            <input type="checkbox" id="autoGroupNewTabs" name="autoGroupNewTabs" class="form-input">
+        </div>
 
         <button type="submit">Save</button>
     </form>
