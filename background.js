@@ -3,6 +3,11 @@
 
 // FIXME: right clicking an open tab group and clicking "Close Group" sometimes crashes browser!
 
+// FIXME: left aligning collapsed groups when there's ungrouped tabs on the tab bar
+// causes them to be positioned between the collapsed groups and the active expanded group which is weird
+// probably want all the ungrouped tabs aligned to the opposite side?
+
+
 import { ALIGN, DEFAULT_OPTIONS, CONSOLE_PREFIX } from './shared.js';
 
 // timeout for receiving the browser's onStartup event
