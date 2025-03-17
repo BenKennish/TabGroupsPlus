@@ -223,7 +223,7 @@ async function doCollapseAndMoveGroups(groups)
 
         if (!group.collapsed)
         {
-            console.log(CONSOLE_PREFIX + "Collapsing group:" + group);
+            console.log(CONSOLE_PREFIX + "Collapsing group:", group);
 
             // Collapse group (wrapped as an awaited Promise) and wait until resolved
             await new Promise((resolve, reject) =>
