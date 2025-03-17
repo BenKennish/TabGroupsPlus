@@ -386,7 +386,7 @@ function collapseAndMoveOtherGroups(tab, delayMs)
             // delete the timer as we're now running
             delete windowActionTimers[tab.windowId];
 
-            console.log(CONSOLE_PREFIX + ">>>>>> Action timer for window " + tab.windowId + " running");
+            console.log(CONSOLE_PREFIX + ">>>>>> Action timer for window " + tab.windowId + " timed out - running doCollapseAndMoveGroups()");
             await doCollapseAndMoveGroups(groupsOrdered);
         }, delayMs);
     });
@@ -557,7 +557,7 @@ function onActivateUninjectableTab(tabId)
 function onTabActivated(activeInfo)
 {
     lastActiveTabIds[activeInfo.windowId] = activeInfo.tabId;
-    console.debug(CONSOLE_PREFIX + "onActivated updated lastActiveTabIds with tab id: ", activeInfo.tabId);
+    console.debug(CONSOLE_PREFIX + ">>> onActivated tab id:", activeInfo.tabId);
 
     isContentScriptActive(activeInfo.tabId).then((isInjected) =>
     {
