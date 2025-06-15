@@ -19,6 +19,11 @@
             gap: 10px;
         }
 
+        .form-spacer {
+            height: 20px;
+            /* Spacer between form elements */
+        }
+
         /* Label styling */
         .form-label {
             width: 300px;
@@ -55,7 +60,7 @@
                 class="form-input" style="width: 50px;">
         </div>
         <div class="form-row">
-            <label for="collapseDelayOnActivateUninjectedTabMs" class="form-label">Collapse delay on activated a system
+            <label for="collapseDelayOnActivateUninjectedTabMs" class="form-label">Collapse delay on activating a system
                 tab (ms):</label>
             <input type="number" id="collapseDelayOnActivateUninjectedTabMs"
                 name="collapseDelayOnActivateUninjectedTabMs" class="form-input" style="width: 50px;">
@@ -64,6 +69,8 @@
             <label for="autoGroupNewTabs" class="form-label">Auto group new tabs into same group as active tab?</label>
             <input type="checkbox" id="autoGroupNewTabs" name="autoGroupNewTabs" class="form-input">
         </div>
+
+        <div class="form-spacer"></div>
 
         <button type="submit">Save</button>
         <button id="cancel">Cancel</button>
