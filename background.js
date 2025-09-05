@@ -330,7 +330,7 @@ async function compactGroups(activeTab)
                 {
                     if (chrome.runtime.lastError)
                     {
-                        reject(`Failed to restore position of previously active group ${group.id}: ${chrome.runtime.lastError}`);
+                        reject(`Failed to restore position of previously active group ${prevActiveGroup.id}: ${chrome.runtime.lastError}`);
                     }
                     resolve();
                 });

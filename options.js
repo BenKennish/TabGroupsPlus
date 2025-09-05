@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', function ()
 
         // update the HTML to match the options
         document.getElementById('collapseOthersWithGrouplessTab').checked = options.collapseOthersWithGrouplessTab;
-        document.getElementById('alignTabGroupsAfterCollapsing').value = options.alignTabGroupsAfterCollapsing;
+        document.getElementById('alignActiveTabGroup').value = options.alignActiveTabGroup;
         document.getElementById('collapseDelayOnEnterContentAreaMs').value = options.collapseDelayOnEnterContentAreaMs;
         document.getElementById('collapseDelayOnActivateUninjectedTabMs').value = options.collapseDelayOnActivateUninjectedTabMs;
         document.getElementById('autoGroupNewTabs').checked = options.autoGroupNewTabs;
@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', function ()
         let optionsToSave = {
             collapseOthersWithGrouplessTab: document.getElementById('collapseOthersWithGrouplessTab').checked,
 
-            alignTabGroupsAfterCollapsing: parseInt(document.getElementById('alignTabGroupsAfterCollapsing').value, 10),
+            alignActiveTabGroup: parseInt(document.getElementById('alignActiveTabGroup').value, 10),
             collapseDelayOnEnterContentAreaMs: parseInt(document.getElementById('collapseDelayOnEnterContentAreaMs').value, 10),
             collapseDelayOnActivateUninjectedTabMs: parseInt(document.getElementById('collapseDelayOnActivateUninjectedTabMs').value, 10),
 
