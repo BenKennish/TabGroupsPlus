@@ -3,11 +3,11 @@
 
 // constant object to fake an 'enum'
 // the numbers for LEFT and RIGHT conveniently match the tab index locations
-// to move groups to (start and end respectively)
+// to move the active group to (start and end respectively)
 export const ALIGN = Object.freeze({
     LEFT: 0,
     RIGHT: -1,
-    DISABLED: 69
+    DISABLED: 666
 });
 
 export const DEFAULT_OPTIONS = Object.freeze({
@@ -16,7 +16,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
     collapseOthersWithGrouplessTab: true,
 
     // valid values ALIGN.LEFT, ALIGN.RIGHT, or ALIGN.DISABLED
-    alignTabGroupsAfterCollapsing: ALIGN.LEFT,
+    alignActiveTabGroup: ALIGN.LEFT,
 
     // time to wait after mouse cursor entering a tab's content area before collapsing the other tab groups in the window
     collapseDelayOnEnterContentAreaMs: 2000,
