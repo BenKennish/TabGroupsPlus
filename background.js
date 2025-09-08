@@ -9,6 +9,9 @@
 
 // TODO: option to auto close idle tab broups (not just collapse the group, actually close it)
 
+// TODO: on focusing a new tab, don't take any action if the active group hasn't changed
+
+// TODO: for any process, fetch the tab object and pass it around rather than just the tab ID (but only when necessary)
 
 import { ALIGN, DEFAULT_OPTIONS, CONSOLE_PREFIX } from './shared.js';
 
@@ -16,10 +19,11 @@ import { ALIGN, DEFAULT_OPTIONS, CONSOLE_PREFIX } from './shared.js';
 const ON_STARTUP_WAIT_TIMEOUT_MS = 500;
 
 // time to wait before listening for events if browser is starting up
-const LISTEN_DELAY_ON_BROWSER_STARTUP_MS = 10000;
+const LISTEN_DELAY_ON_BROWSER_STARTUP_MS = 5000;
 
 // time to wait after a new tab is created before checking its group
-// (the browser may move the tab into a group automatically very shortly after its creation)
+// (the reason for this is that the browser may move the tab into a group
+// automatically very shortly after its creation)
 const CHECK_GROUPING_DELAY_ON_CREATE_TAB_MS = 250;
 
 // enable/disable debug console messages
@@ -28,7 +32,7 @@ const SHOW_DEBUG_CONSOLE_MSGS = true;
 // enabled requires setting "host_permissions" in manifest.json
 const DYNAMIC_INJECTS = true;
 
-// user options from the storage
+// store user options from the storage in this object
 let userOptions = {};
 
 
@@ -45,12 +49,20 @@ const windowData = new Map();
 // example of data structure within the windowData map defined above
 // this is used as a template/'constructor' for new window data objects
 const newWindowDataObj = {
-    activeGroupId: null,             // the group ID of the currently active group (or the previously active group if compactGroups() hasn't yet run after a new tab group is activated)
-    activeGroupPrevGroupIndex: null, // the tab group position index that group used to have before it was activated, and moved by this extension
 
-    lastActiveTabId: null,           // ID of last active tab, used when a new tab is created in order to add it to the group of this (previously active) tab
-    newTabId: null,                  // set to the ID of a new tab so that onActivate and onCreate don't stomp on each other
-    compactTimer: null               // setTimeout object for the compact operation
+    // the group ID of the group that was active when compactGroups() last ran
+    activeGroupId: chrome.tabGroups.TAB_GROUP_ID_NONE,
+    // the group position index (not tab index) the group used to have before it was activated, and moved by this extension
+    activeGroupOldPos: null,
+
+    // ID of last active tab, used when a new tab is created in order to add it to the group of this (previously active) tab
+    lastActiveTabId: null,
+
+    // set to the ID of a new tab so that onActivate and onCreate don't stomp on each other
+    newTabId: null,
+
+    // setTimeout timer object for the compact operation
+    compactTimer: null
 };
 
 
@@ -66,7 +78,7 @@ const newWindowDataObj = {
 //
 function isContentScriptActive(tabId)
 {
-    // no reject needed as the any error is just a false
+    // no reject needed as any error is just a false
     return new Promise((resolve) =>
     {
         chrome.tabs.sendMessage(tabId, { action: "ping" }, (response) =>
@@ -91,30 +103,26 @@ function getTabGroupsOrdered(windowId, excludeId)
 {
     return new Promise((resolve, reject) =>
     {
+        console.log(CONSOLE_PREFIX + `getTabGroupsOrdered(${windowId}, ${excludeId})`);
+
         // grab all the tabs in the window (will be sorted by left->right position)
         chrome.tabs.query({ windowId: windowId }, (tabs) =>
         {
             if (chrome.runtime.lastError)
             {
-                reject(chrome.runtime.lastError);
+                reject(chrome.runtime.lastError.message);
             }
 
             const groupIdsOrdered = [];
-            let lastGroupId = chrome.tabGroups.TAB_GROUP_ID_NONE;
-
-            let groupIndex = 0;
+            let lastSeenGroupId = chrome.tabGroups.TAB_GROUP_ID_NONE;
 
             tabs.forEach((tab) =>
             {
-                if (tab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE)
+                if (tab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE ||
+                    tab.groupId === lastSeenGroupId)
                 {
                     // ignore ungrouped tabs
-                    return;
-                }
-
-                if (tab.groupId === lastGroupId)
-                {
-                    // ignore tabs in the same group as the previously examined tab
+                    // and tabs in the same group as the previously examined tab
                     return;
                 }
 
@@ -126,11 +134,8 @@ function getTabGroupsOrdered(windowId, excludeId)
                     // push this group ID to the list
                     groupIdsOrdered.push(tab.groupId);
                 }
-                groupIndex++;
-                lastGroupId = tab.groupId;
+                lastSeenGroupId = tab.groupId;
             });
-
-            // FIXME: we aren't doing anythign with groupIndex!!
 
             // create array of promises to retrieve each tab group, in same order as in groupIdsOrdered
             // creates a list of Promises that retrieve each specific tab group
@@ -141,7 +146,8 @@ function getTabGroupsOrdered(windowId, excludeId)
                 // wait for that promise to resolve
                 .then((groups) =>
                 {
-                    // i think ChatGPT might have overengineered this because Promise.all() should return the results in the same order as the input iterable anyway
+                    // i think ChatGPT might have overengineered this because Promise.all()
+                    // should return the results in the same order as the input iterable anyway
 
                     // groups is now a list of tab group objects
                     // possible in incorrect order
@@ -152,7 +158,6 @@ function getTabGroupsOrdered(windowId, excludeId)
                     );
 
                     resolve(groupsOrdered);  // resolve refers to the main getTabGroupsOrdered() function promise
-
                 })
                 .catch((error) =>
                 {
@@ -205,9 +210,52 @@ async function getIndexOfFirstTabInGroup(group)
     }
     catch (error)
     {
-        console.error(`Error querying tabs: ${error}`);
+        console.error(`Error querying tabs:`, error);
         return null;
     }
+}
+
+
+// returns a promise that collapses all tab groups in a window except the one with group ID `excludeGroupId`
+// if you want to collapse all groups, pass chrome.tabGroups.TAB_GROUP_ID_NONE for excludeGroupId
+function collapseWindowGroups(windowId, excludeGroupId)
+{
+    return new Promise((resolve, reject) =>
+    {
+        chrome.tabGroups.query({ windowId: windowId, collapsed: false }, (groups) =>
+        {
+            if (chrome.runtime.lastError)
+            {
+                console.error(`${CONSOLE_PREFIX}Failed to query tabs of window ${activeTab.windowId}`, chrome.runtime.lastError);
+                reject(`Failed to query tabs of window ${activeTab.windowId}: ${chrome.runtime.lastError.message}`)
+            }
+
+            let groupIds = groups.map(group => group.id);
+
+            if (excludeGroupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
+            {
+                // filter out the excluded group ID
+                // this seems inefficient way of doing it as a separate step
+                groupIds = groupIds.filter(id => id !== excludeGroupId);
+            }
+
+            const collapseGroupPromises = groupIds.map(groupId => chrome.tabGroups.update(groupId, { collapsed: true }));
+            // now collapseGroupPromises is a list of promises to collapse each uncollapsed group in the window
+
+            Promise.all(collapseGroupPromises)
+                .then(() =>
+                {
+                    resolve();
+                }).catch((error) =>
+                {
+                    // one or more collapse operations failed
+                    reject(`Failed to collapse one or more groups in window ${windowId}: ${error}`);
+                });
+
+        })
+
+    });
+
 }
 
 
@@ -218,23 +266,38 @@ async function compactGroups(activeTab)
 {
     console.log(CONSOLE_PREFIX + ">>>>>> Compacting groups for window " + activeTab.windowId + ", active tab is:", activeTab);
 
-    // sanity check
+    // sanity checks
     if (activeTab.active === false)
     {
-        console.error("compactGroups() called with a non-active tab", activeTab);
+        console.error("compactGroups() called with a non-active tab!", activeTab);
         return;
     }
 
-    // fetch the IDs of all OTHER groups in this window (excluding the active tab's group) in left-to-right order
-    // its possible that activeTab.groupId is TAB_GROUP_ID_NONE (-1) if the active tab is ungrouped
-    // which will mean that ALL groups are considered inactive
-    const inactiveGroupsOrdered = await getTabGroupsOrdered(activeTab.windowId, activeTab.groupId);
+    if (userOptions.alignActiveTabGroup !== ALIGN.LEFT &&
+        userOptions.alignActiveTabGroup !== ALIGN.RIGHT &&
+        userOptions.alignActiveTabGroup !== ALIGN.DISABLED)
+    {
+        console.error('Unexpected value for alignActiveTabGroup', userOptions.alignActiveTabGroup);
+        return;
+    }
 
-    console.log(CONSOLE_PREFIX + "Inactive groups ordered:", inactiveGroupsOrdered);
 
     // ==================================================================
     // (1) collapse all the inactive groups
     // ==================================================================
+    console.log(CONSOLE_PREFIX + "======== (1) Collapsing inactive groups...");
+
+    // fetch the IDs of all OTHER groups in this window (excluding the active tab's group) in left-to-right order
+    // its possible that activeTab.groupId is TAB_GROUP_ID_NONE (-1) if the active tab is ungrouped
+    // which will mean that ALL groups are considered inactive
+
+    // -------------- old method
+    /*
+    // old way of doing it - less efficient as unnecessarily orders the tab groups
+    const inactiveGroupsOrdered = await getTabGroupsOrdered(activeTab.windowId, activeTab.groupId);
+
+    // FIXME: this is returning an empty list! WHY?
+    console.log(CONSOLE_PREFIX + "Inactive groups ordered:", inactiveGroupsOrdered);
 
     let collapsePromises = [];
 
@@ -248,9 +311,8 @@ async function compactGroups(activeTab)
                 {
                     if (chrome.runtime.lastError)
                     {
-                        // we don't reject so we can continue and try other groups
-                        console.error(CONSOLE_PREFIX + "Failed to collapse group " + inactiveGroup.title, chrome.runtime.lastError);
-                        reject("Failed to collapse group " + inactiveGroup.id, chrome.runtime.lastError);
+                        console.error(`${CONSOLE_PREFIX}Failed to collapse group ${inactiveGroup.title}`, chrome.runtime.lastError);
+                        reject(`Failed to collapse group ${inactiveGroup.id}: ${chrome.runtime.lastError.message}`);
                     }
                     resolve();
                 });
@@ -259,9 +321,14 @@ async function compactGroups(activeTab)
             console.log(CONSOLE_PREFIX + "Collapsing group:", inactiveGroup);
         }
     }
-
     // wait until all collapse operations have settled (completed or failed)
     await Promise.allSettled(collapsePromises);
+    */
+
+    // -------------- new method
+    // new way of doing it with new function - more efficient as it doesn't order the tab groups
+    await collapseWindowGroups(activeTab.windowId, activeTab.groupId);
+
 
     // we've now collapsed (or tried to collapse) all the groups except the active one
 
@@ -274,6 +341,7 @@ async function compactGroups(activeTab)
     // ==================================================================
     // (2) restore the position of the *previously* active group (if there is one)
     // ==================================================================
+    console.log(CONSOLE_PREFIX + "======== (2) Restoring position of previously active group...");
 
     // prepare to start moving groups around
     const thisWindowData = windowData.get(activeTab.windowId);
@@ -281,33 +349,34 @@ async function compactGroups(activeTab)
     {
         throw new Error("No window data for window " + activeTab.windowId);
     }
-    console.warn(CONSOLE_PREFIX + "thisWindowData:", thisWindowData);
+    console.log(CONSOLE_PREFIX + "thisWindowData:", thisWindowData);
 
     // NOTE:
-    // thisWindowData.activeGroupId currently refers to the *previously* active tab group's ID!
-    // thisWindowData.activeGroupPrevGroupIndex currently refers to the *previously* active tab group's *previous* position!
+    // this function has been called because the active tab has changed
+    // thisWindowData.activeGroupId now refers to the *previously* active tab group's ID!
+    // thisWindowData.activeGroupOldPos now refers to the *previously* active tab group's *previous* position that we now want to move it back to
     //   so we create some more sensible variable names...
     let prevActiveGroupId = thisWindowData.activeGroupId;
-    let prevActiveGroupPrevGroupIndex = thisWindowData.activeGroupPrevGroupIndex;
+    let prevActiveGroupOldPos = thisWindowData.activeGroupOldPos;
 
     let tabIndexToMoveTo = null;
 
-    if (prevActiveGroupId)  // if null or 0 or something, just ignore
+    if (prevActiveGroupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
     {
         const prevActiveGroup = await chrome.tabGroups.get(prevActiveGroupId);
-        console.log(CONSOLE_PREFIX + "Group previously active at group index " + prevActiveGroupPrevGroupIndex + ":", prevActiveGroup);
+        console.log(`${CONSOLE_PREFIX}Group previously active and previously at group index ${prevActiveGroupOldPos}:`, prevActiveGroup);
 
-        // retrieve ALL tab groups in this window (excluding none)
+        // retrieve ALL tab groups in this window in left-to-right order
         const groupsOrdered = await getTabGroupsOrdered(activeTab.windowId, chrome.tabGroups.TAB_GROUP_ID_NONE);
 
         // retrive the tab group that's currently occupying the group pos index where the previously active group was
-        if (groupsOrdered[prevActiveGroupPrevGroupIndex] !== null)
+        if (groupsOrdered[prevActiveGroupOldPos] !== null)
         {
             // there's a group located in the group index pos where we want to return this group
             // this group will be bumped one place to the right after the move
 
             // fetch the tab index of the first tab of the group that's currently at this group index position
-            tabIndexToMoveTo = await getIndexOfFirstTabInGroup(groupsOrdered[prevActiveGroupPrevGroupIndex]);
+            tabIndexToMoveTo = await getIndexOfFirstTabInGroup(groupsOrdered[prevActiveGroupOldPos]);
         }
         else
         {
@@ -328,8 +397,9 @@ async function compactGroups(activeTab)
                 {
                     if (chrome.runtime.lastError)
                     {
-                        console.error(`Failed to restore position of previously active group ${prevActiveGroup.id}`, chrome.runtime.lastError);
-                        reject(`Failed to restore position of previously active group ${prevActiveGroup.id}`);
+                        // FIXME: getting "Cannot move the group to an index that is in the middle of another group."
+                        console.error(`Failed restoring previously active group ${prevActiveGroup.title} to tab index ${tabIndexToMoveTo}`, chrome.runtime.lastError.message);
+                        reject(`Failed restoring previously active group ${prevActiveGroup.title} to tab index ${tabIndexToMoveTo} : ${chrome.runtime.lastError.message}`);
                     }
                     resolve();
                 });
@@ -338,8 +408,8 @@ async function compactGroups(activeTab)
 
         // we've now returned the previously active group into the correct place
         // so we clear the record
-        thisWindowData.activeGroupId = null;
-        thisWindowData.activeGroupPrevGroupIndex = null;
+        thisWindowData.activeGroupId = chrome.tabGroups.TAB_GROUP_ID_NONE;
+        thisWindowData.activeGroupOldPos = null;
     }
     else
     {
@@ -353,15 +423,20 @@ async function compactGroups(activeTab)
     // if the user is clicking around quickly, this info is not updating
     // but that's (probably) ok because we haven't yet moved any groups around either
 
+    console.log(CONSOLE_PREFIX + "======== (3) Updating windowData object...");
+
+    thisWindowData.activeGroupId = activeTab.groupId;
+    thisWindowData.activeGroupOldPos = null; // will be updated below if active tab is grouped
+
     if (activeTab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
     {
-        // refetch ordered list of tab groups (after the move)
+        // if the active tab is in a group
+
+        // refetch ordered list of all tab groups (after the move)
         const groupsOrdered = await getTabGroupsOrdered(activeTab.windowId, chrome.tabGroups.TAB_GROUP_ID_NONE);
 
-        thisWindowData.activeGroupId = activeTab.groupId;
-
         // calculate and store group pos index of the active group (before it is moved to leftmost/rightmost)
-        thisWindowData.activeGroupPrevGroupIndex = groupsOrdered.findIndex((group) =>
+        thisWindowData.activeGroupOldPos = groupsOrdered.findIndex((group) =>
         {
             return group && group.id === activeTab.groupId;
         });
@@ -370,23 +445,14 @@ async function compactGroups(activeTab)
     // ==================================================================
     // (4) position the new active `group` to the very left or very right
     // ==================================================================
-    switch (userOptions.alignActiveTabGroup)
-    {
-        case ALIGN.LEFT:
-        case ALIGN.RIGHT:
-            // we can do this as the constant values are 0 and -1 respectively
-            tabIndexToMoveTo = userOptions.alignActiveTabGroup;
-            break;
-        default:
-            console.error('Unexpected value for alignActiveTabGroup', userOptions.alignActiveTabGroup);
-            return;
-    }
+    console.log(CONSOLE_PREFIX + "======== (3) Aliging active group to leftmost/rightmost...");
 
     if (activeTab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
     {
         await new Promise((resolve, reject) =>
         {
-            chrome.tabGroups.move(activeTab.groupId, { index: tabIndexToMoveTo }, (movedGroup) =>
+            // userOptions.alignActiveGroup will be either 0 (Align.LEFT) or -1 (Align.RIGHT)
+            chrome.tabGroups.move(activeTab.groupId, { index: userOptions.alignActiveTabGroup }, (movedGroup) =>
             {
                 if (chrome.runtime.lastError)
                 {
@@ -462,20 +528,27 @@ function scheduleCompactOtherGroups(tab, delayMs)
     {
         if (!userOptions.collapseOthersWithGrouplessTab)
         {
-            console.debug(CONSOLE_PREFIX + `Tab ${tab.id}, window ${tab.windowId} is ungrouped and collapseOthersWithGrouplessTab is false. Taking no further action.`);
+            console.debug(CONSOLE_PREFIX + `Tab ${tab.id}, window ${tab.windowId} is ungrouped and collapseOthersWithGrouplessTab is false.  Taking no further action.`);
             return;
         }
-        console.debug(CONSOLE_PREFIX + `Tab ${tab.id}, window ${tab.windowId}, group none. Scheduling collapse and move for the window...`);
+        console.debug(CONSOLE_PREFIX + `Tab ${tab.id}, window ${tab.windowId} is ungrouped and collapseOthersWithGrouplessTab is true.  Scheduling collapse and move for the window...`);
     }
-    else
+
+    let thisWinData = windowData.get(tab.windowId);
+
+    if (tab.groupId === thisWinData.activeGroupId)
     {
-        console.debug(CONSOLE_PREFIX + `Tab ${tab.id}, window ${tab.windowId}, group ${tab.groupId}. Scheduling collapse and move for the window...`);
+        console.warn(CONSOLE_PREFIX + `Tab ${tab.id}, window ${tab.windowId}, group ${tab.groupId} is in the active group.  Taking no further action.`);
+        return;
     }
+
+    console.debug(CONSOLE_PREFIX + `Tab ${tab.id}, window ${tab.windowId}, group ${tab.groupId}. Scheduling collapse and move for the window...`);
+
 
     // clear any pending operation timers on the current tab's window
     cancelCompactTimer(tab.windowId);
 
-    console.debug(CONSOLE_PREFIX + `Scheduling action timer for window ${tab.windowId} in ${delayMs}ms...`);
+    console.debug(`${CONSOLE_PREFIX}Scheduling action timer for window ${tab.windowId} in ${delayMs}ms...`);
 
     let winData = windowData.get(tab.windowId);
 
@@ -594,11 +667,11 @@ function onRuntimeMessage(message, sender, sendResponse)
 
             if (!contentTab)
             {
-                console.warn(CONSOLE_PREFIX + 'No sender tab for mouseInContentArea event');
+                console.error(CONSOLE_PREFIX + 'No sender tab for mouseInContentArea event');
             }
             else if (!contentTab.active)
             {
-                console.warn(CONSOLE_PREFIX + 'Mouse entered/left content area of non-active tab - what is this witchcraft?!', contentTab);
+                console.error(CONSOLE_PREFIX + 'Mouse entered/left content area of non-active tab - what is this witchcraft?!', contentTab);
             }
             else if (isMouseInContentArea)
             {
@@ -634,7 +707,7 @@ function onActivateUninjectableTab(tabId)
     {
         if (chrome.runtime.lastError)
         {
-            console.error(CONSOLE_PREFIX + "Failed to get activated tab " + activeInfo.tabId, chrome.runtime.lastError);
+            console.error(`${CONSOLE_PREFIX}Failed to get activated tab ${activeInfo.tabId}`, chrome.runtime.lastError);
             return;
         }
 
@@ -652,7 +725,8 @@ function onActivateUninjectableTab(tabId)
 }
 
 // Listen for tab activation to schedule collapse of non-active groups
-// fallback if the content script cannot be injected into the tab contents
+// used as a fallback to trigger compaction when the content script
+//   can't be injected into the active tab's content pane
 //
 function onTabActivated(activeInfo)
 {
@@ -668,7 +742,8 @@ function onTabActivated(activeInfo)
         windowData.set(activeInfo.windowId, { ...newWindowDataObj });
     }
 
-    windowData.get(activeInfo.windowId).lastActiveTabId = activeInfo.tabId;
+    let thisWinData = windowData.get(activeInfo.windowId);
+    thisWinData.lastActiveTabId = activeInfo.tabId;
 
     console.debug(CONSOLE_PREFIX + ">>>>>> onActivated tab id:", activeInfo.tabId);
 
@@ -708,11 +783,11 @@ function onTabActivated(activeInfo)
                     case "Extension manifest must request permission to access this host":
                         // the last one tends to happen when a chrome:// URL tab is not yet loaded when activated
 
-                        console.warn(CONSOLE_PREFIX + "Expected error injecting into tab " + activeInfo.tabId + ":", chrome.runtime.lastError.message);
+                        console.log(`${CONSOLE_PREFIX}Expected error injecting into tab ${activeInfo.tabId}:`, chrome.runtime.lastError.message);
                         break;
                     // unexpected injection fails:
                     default:
-                        console.error(CONSOLE_PREFIX + "Unexpected error injecting into tab " + activeInfo.tabId + ":", chrome.runtime.lastError.message);
+                        console.error(`${CONSOLE_PREFIX}Unexpected error injecting into tab ${activeInfo.tabId} :`, chrome.runtime.lastError.message);
                 }
 
                 onActivateUninjectableTab(activeInfo.tabId);
@@ -790,7 +865,7 @@ function onTabCreated(newTab)
         return;
     }
 
-    // we immediately grab this before onActivated runs for this tab and updates it with this tab ID
+    // we immediately grab this before onActivated runs for this tab and updates it with this new tab's ID
     let lastActiveTabId = windowData.get(newTab.windowId).lastActiveTabId;
 
     console.log(`${CONSOLE_PREFIX}>>>>>> Tab created: ${newTab.id} in window ${newTab.windowId}`, newTab);
