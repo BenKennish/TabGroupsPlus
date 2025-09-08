@@ -103,7 +103,7 @@ function getTabGroupsOrdered(windowId, excludeId)
 {
     return new Promise((resolve, reject) =>
     {
-        console.log(CONSOLE_PREFIX + `getTabGroupsOrdered(${windowId}, ${excludeId})`);
+        console.log(`${CONSOLE_PREFIX} getTabGroupsOrdered(${windowId}, ${excludeId})`);
 
         // grab all the tabs in the window (will be sorted by left->right position)
         chrome.tabs.query({ windowId: windowId }, (tabs) =>
@@ -179,7 +179,7 @@ function cancelCompactTimer(windowId)
     {
         clearTimeout(winData.compactTimer);
         winData.compactTimer = null;
-        console.debug(`${CONSOLE_PREFIX}Cleared compact timer for window ${windowId}`);
+        console.debug(`${CONSOLE_PREFIX} Cleared compact timer for window ${windowId}`);
     }
 }
 
@@ -195,12 +195,11 @@ async function getIndexOfFirstTabInGroup(group)
 
         if (tabs.length === 0)
         {
-            console.warn("No tabs found in group '" + group.title + "' - bit weird!", group);
+            console.warn(`${CONSOLE_PREFIX} No tabs found in group '${group.title}' - bit weird!`, group);
             return null;
         }
 
         // Find the tab with the minimum index
-        // might not be necessary as chrome.tabs.query() seems to return the tabs in left-to-right order?
         const firstTab = tabs.reduce((minTab, currentTab) =>
         {
             return (currentTab.index < minTab.index) ? currentTab : minTab;
@@ -210,7 +209,7 @@ async function getIndexOfFirstTabInGroup(group)
     }
     catch (error)
     {
-        console.error(`Error querying tabs:`, error);
+        console.error(`${CONSOLE_PREFIX} Error querying tabs:`, error);
         return null;
     }
 }
@@ -226,7 +225,7 @@ function collapseWindowGroups(windowId, excludeGroupId)
         {
             if (chrome.runtime.lastError)
             {
-                console.error(`${CONSOLE_PREFIX}Failed to query tabs of window ${activeTab.windowId}`, chrome.runtime.lastError);
+                console.error(`${CONSOLE_PREFIX} Failed to query tabs of window ${activeTab.windowId}`, chrome.runtime.lastError);
                 reject(`Failed to query tabs of window ${activeTab.windowId}: ${chrome.runtime.lastError.message}`)
             }
 
@@ -264,12 +263,12 @@ function collapseWindowGroups(windowId, excludeGroupId)
 //
 async function compactGroups(activeTab)
 {
-    console.log(CONSOLE_PREFIX + ">>>>>> Compacting groups for window " + activeTab.windowId + ", active tab is:", activeTab);
+    console.log(CONSOLE_PREFIX + " >>> Compacting groups for window " + activeTab.windowId + ", active tab is:", activeTab);
 
     // sanity checks
     if (activeTab.active === false)
     {
-        console.error("compactGroups() called with a non-active tab!", activeTab);
+        console.error(CONSOLE_PREFIX + " compactGroups() called with a non-active tab!", activeTab);
         return;
     }
 
@@ -277,7 +276,7 @@ async function compactGroups(activeTab)
         userOptions.alignActiveTabGroup !== ALIGN.RIGHT &&
         userOptions.alignActiveTabGroup !== ALIGN.DISABLED)
     {
-        console.error('Unexpected value for alignActiveTabGroup', userOptions.alignActiveTabGroup);
+        console.error(CONSOLE_PREFIX + ' Unexpected value for alignActiveTabGroup', userOptions.alignActiveTabGroup);
         return;
     }
 
@@ -285,7 +284,7 @@ async function compactGroups(activeTab)
     // ==================================================================
     // (1) collapse all the inactive groups
     // ==================================================================
-    console.log(CONSOLE_PREFIX + "======== (1) Collapsing inactive groups...");
+    console.log(CONSOLE_PREFIX + " ======== (1) Collapsing inactive groups...");
 
     // fetch the IDs of all OTHER groups in this window (excluding the active tab's group) in left-to-right order
     // its possible that activeTab.groupId is TAB_GROUP_ID_NONE (-1) if the active tab is ungrouped
@@ -341,7 +340,7 @@ async function compactGroups(activeTab)
     // ==================================================================
     // (2) restore the position of the *previously* active group (if there is one)
     // ==================================================================
-    console.log(CONSOLE_PREFIX + "======== (2) Restoring position of previously active group...");
+    console.log(CONSOLE_PREFIX + " ======== (2) Restoring position of previously active group...");
 
     // prepare to start moving groups around
     const thisWindowData = windowData.get(activeTab.windowId);
@@ -349,7 +348,7 @@ async function compactGroups(activeTab)
     {
         throw new Error("No window data for window " + activeTab.windowId);
     }
-    console.log(CONSOLE_PREFIX + "thisWindowData:", thisWindowData);
+    console.log(CONSOLE_PREFIX + " thisWindowData:", thisWindowData);
 
     // NOTE:
     // this function has been called because the active tab has changed
@@ -361,13 +360,24 @@ async function compactGroups(activeTab)
 
     let tabIndexToMoveTo = null;
 
-    if (prevActiveGroupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
+    if (prevActiveGroupId !== chrome.tabGroups.TAB_GROUP_ID_NONE && prevActiveGroupOldPos !== null)
     {
-        const prevActiveGroup = await chrome.tabGroups.get(prevActiveGroupId);
-        console.log(`${CONSOLE_PREFIX}Group previously active and previously at group index ${prevActiveGroupOldPos}:`, prevActiveGroup);
+        let prevActiveGroup = null;
+        try
+        {
+            prevActiveGroup = await chrome.tabGroups.get(prevActiveGroupId);
+        }
+        catch (err)
+        {
+            console.error(`${CONSOLE_PREFIX} Failed to retrieve previously active group with ID ${prevActiveGroupId}.`, err);
+            return;
+        }
+        console.log(`${CONSOLE_PREFIX} Group previously active and previously at group index ${prevActiveGroupOldPos}:`, prevActiveGroup);
 
         // retrieve ALL tab groups in this window in left-to-right order
         const groupsOrdered = await getTabGroupsOrdered(activeTab.windowId, chrome.tabGroups.TAB_GROUP_ID_NONE);
+
+
 
         // retrive the tab group that's currently occupying the group pos index where the previously active group was
         if (groupsOrdered[prevActiveGroupOldPos] !== null)
@@ -381,7 +391,7 @@ async function compactGroups(activeTab)
         else
         {
             // this might happen if the user has closed some groups or moved them into a different window
-            console.warn(CONSOLE_PREFIX + "No group currently at this location.  Moving to rightmost position.");
+            console.warn(CONSOLE_PREFIX + " No group currently at this location.  Moving to rightmost position.");
 
             // just move this group to the rightmost position
             tabIndexToMoveTo = -1;
@@ -398,8 +408,8 @@ async function compactGroups(activeTab)
                     if (chrome.runtime.lastError)
                     {
                         // FIXME: getting "Cannot move the group to an index that is in the middle of another group."
-                        console.error(`Failed restoring previously active group ${prevActiveGroup.title} to tab index ${tabIndexToMoveTo}`, chrome.runtime.lastError.message);
-                        reject(`Failed restoring previously active group ${prevActiveGroup.title} to tab index ${tabIndexToMoveTo} : ${chrome.runtime.lastError.message}`);
+                        console.error(`${CONSOLE_PREFIX} Failed restoring previously active group ${prevActiveGroup.title} to tab index ${tabIndexToMoveTo}`, chrome.runtime.lastError.message);
+                        reject(`Failed restoring previously active group ${prevActiveGroup.title} to tab index ${tabIndexToMoveTo}: ${chrome.runtime.lastError.message}`);
                     }
                     resolve();
                 });
@@ -413,7 +423,7 @@ async function compactGroups(activeTab)
     }
     else
     {
-        console.warn(CONSOLE_PREFIX + "No previously active group to restore");
+        console.warn(CONSOLE_PREFIX + " No previously active group to restore");
     }
 
     // ==================================================================
@@ -423,7 +433,7 @@ async function compactGroups(activeTab)
     // if the user is clicking around quickly, this info is not updating
     // but that's (probably) ok because we haven't yet moved any groups around either
 
-    console.log(CONSOLE_PREFIX + "======== (3) Updating windowData object...");
+    console.log(CONSOLE_PREFIX + " ======== (3) Updating windowData object...");
 
     thisWindowData.activeGroupId = activeTab.groupId;
     thisWindowData.activeGroupOldPos = null; // will be updated below if active tab is grouped
@@ -445,7 +455,7 @@ async function compactGroups(activeTab)
     // ==================================================================
     // (4) position the new active `group` to the very left or very right
     // ==================================================================
-    console.log(CONSOLE_PREFIX + "======== (3) Aliging active group to leftmost/rightmost...");
+    console.log(CONSOLE_PREFIX + " ======== (4) Aliging active group to leftmost/rightmost...");
 
     if (activeTab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
     {
@@ -461,6 +471,10 @@ async function compactGroups(activeTab)
                 resolve();
             });
         });
+    }
+    else
+    {
+        console.warn(CONSOLE_PREFIX + " Active tab is ungrouped, so no group to align");
     }
 
 
@@ -526,29 +540,29 @@ function scheduleCompactOtherGroups(tab, delayMs)
 
     if (tab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE)
     {
-        if (!userOptions.collapseOthersWithGrouplessTab)
+        if (!userOptions.doCompactOnActivateUngroupedTab)
         {
-            console.debug(CONSOLE_PREFIX + `Tab ${tab.id}, window ${tab.windowId} is ungrouped and collapseOthersWithGrouplessTab is false.  Taking no further action.`);
+            console.debug(`${CONSOLE_PREFIX} Tab ${tab.id}, window ${tab.windowId} is ungrouped and doCompactOnActivatingUngroupedTab is false.  Taking no further action.`);
             return;
         }
-        console.debug(CONSOLE_PREFIX + `Tab ${tab.id}, window ${tab.windowId} is ungrouped and collapseOthersWithGrouplessTab is true.  Scheduling collapse and move for the window...`);
+        console.debug(`${CONSOLE_PREFIX} Tab ${tab.id}, window ${tab.windowId} is ungrouped and doCompactOnActivatingUngroupedTab is true.  Scheduling collapse and move for the window...`);
     }
 
     let thisWinData = windowData.get(tab.windowId);
 
     if (tab.groupId === thisWinData.activeGroupId)
     {
-        console.warn(CONSOLE_PREFIX + `Tab ${tab.id}, window ${tab.windowId}, group ${tab.groupId} is in the active group.  Taking no further action.`);
+        console.warn(`${CONSOLE_PREFIX} Tab ${tab.id}, window ${tab.windowId}, group ${tab.groupId} is in the active group.  Taking no further action.`);
         return;
     }
 
-    console.debug(CONSOLE_PREFIX + `Tab ${tab.id}, window ${tab.windowId}, group ${tab.groupId}. Scheduling collapse and move for the window...`);
+    console.debug(`${CONSOLE_PREFIX} Tab ${tab.id}, window ${tab.windowId}, group ${tab.groupId}. Scheduling collapse and move for the window...`);
 
 
     // clear any pending operation timers on the current tab's window
     cancelCompactTimer(tab.windowId);
 
-    console.debug(`${CONSOLE_PREFIX}Scheduling action timer for window ${tab.windowId} in ${delayMs}ms...`);
+    console.debug(`${CONSOLE_PREFIX} Scheduling action timer for window ${tab.windowId} in ${delayMs}ms...`);
 
     let winData = windowData.get(tab.windowId);
 
@@ -568,6 +582,7 @@ function scheduleCompactOtherGroups(tab, delayMs)
 // collapsed all tab groups in the window and there were no ungrouped tabs
 // also returns true if user just created a new window (with this single tab)
 //
+// FIXME: why does this need a callback param?  why not just return true/false?
 function isFallbackTab(newTab, callback)
 {
     // `newTab` is the tab object to examine (probably a newly created tab).
@@ -575,7 +590,7 @@ function isFallbackTab(newTab, callback)
 
     if (!newTab)
     {
-        console.error(CONSOLE_PREFIX + "No new tab provided to isFallbackTab");
+        console.error(CONSOLE_PREFIX + " No new tab provided to isFallbackTab");
         callback(false);
     }
 
@@ -583,7 +598,7 @@ function isFallbackTab(newTab, callback)
     {
         if (chrome.runtime.lastError)
         {
-            console.error(CONSOLE_PREFIX + "Error retrieving window for tab :", chrome.runtime.lastError);
+            console.error(CONSOLE_PREFIX + " Error retrieving window for tab :", chrome.runtime.lastError);
             callback(false);
         }
 
@@ -624,7 +639,7 @@ function isFallbackTab(newTab, callback)
                         let group = groups.find(g => g.id === gid);
                         if (!group)
                         {
-                            console.error(CONSOLE_PREFIX + `Group ${gid} not found.`);
+                            console.error(`${CONSOLE_PREFIX} Group ${gid} not found.`);
                             continue;
                         }
                         if (!group.collapsed)
@@ -667,20 +682,20 @@ function onRuntimeMessage(message, sender, sendResponse)
 
             if (!contentTab)
             {
-                console.error(CONSOLE_PREFIX + 'No sender tab for mouseInContentArea event');
+                console.error(CONSOLE_PREFIX + ' No sender tab for mouseInContentArea event');
             }
             else if (!contentTab.active)
             {
-                console.error(CONSOLE_PREFIX + 'Mouse entered/left content area of non-active tab - what is this witchcraft?!', contentTab);
+                console.error(CONSOLE_PREFIX + ' Mouse entered/left content area of non-active tab - what is this witchcraft?!', contentTab);
             }
             else if (isMouseInContentArea)
             {
-                console.debug(CONSOLE_PREFIX + 'Mouse entered contentTab', contentTab);
-                scheduleCompactOtherGroups(contentTab, userOptions.collapseDelayOnEnterContentAreaMs);
+                console.debug(CONSOLE_PREFIX + ' Mouse entered contentTab', contentTab);
+                scheduleCompactOtherGroups(contentTab, userOptions.delayCompactOnEnterContentAreaMs);
             }
             else  // isMouseInContentArea is false
             {
-                console.debug(CONSOLE_PREFIX + 'Mouse left contentTab', contentTab);
+                console.debug(CONSOLE_PREFIX + ' Mouse left contentTab', contentTab);
 
                 // we cancel all the collapse operations in case they went back up to the tab list
                 cancelCompactTimer(contentTab.windowId);
@@ -689,7 +704,7 @@ function onRuntimeMessage(message, sender, sendResponse)
             break;
 
         default:
-            console.error(CONSOLE_PREFIX + "Unexpected action from content script: '" + message.action + "'")
+            console.error(`${CONSOLE_PREFIX} Unexpected action in this message from content script:`, message);
             sendResponse({ status: "invalidAction" });
 
     }
@@ -701,13 +716,13 @@ function onRuntimeMessage(message, sender, sendResponse)
 //
 function onActivateUninjectableTab(tabId)
 {
-    console.warn(`${CONSOLE_PREFIX}>>>>>> Activated uninjectable tab ${tabId}...`);
+    console.warn(`${CONSOLE_PREFIX} >>> Activated uninjectable tab ${tabId}...`);
 
     chrome.tabs.get(tabId, (activeTab) =>
     {
         if (chrome.runtime.lastError)
         {
-            console.error(`${CONSOLE_PREFIX}Failed to get activated tab ${activeInfo.tabId}`, chrome.runtime.lastError);
+            console.error(`${CONSOLE_PREFIX} Failed to get activated tab ${activeInfo.tabId}`, chrome.runtime.lastError);
             return;
         }
 
@@ -715,12 +730,12 @@ function onActivateUninjectableTab(tabId)
 
         if (winData.newTabId === activeTab.id)
         {
-            console.log(CONSOLE_PREFIX + "Ignoring first activation of newly created tab", activeTab.id)
+            console.log(CONSOLE_PREFIX + " Ignoring first activation of newly created tab", activeTab.id)
             winData.newTabId = null;
             return;
         }
 
-        scheduleCompactOtherGroups(activeTab, userOptions.collapseDelayOnActivateUninjectedTabMs);
+        scheduleCompactOtherGroups(activeTab, userOptions.delayCompactOnActivateUninjectedTabMs);
     });
 }
 
@@ -732,7 +747,7 @@ function onTabActivated(activeInfo)
 {
     if (!activeInfo.windowId)
     {
-        console.error('no windowId in onTabActivated');
+        console.error(CONSOLE_PREFIX + ' no windowId in onTabActivated');
         return;
     }
 
@@ -745,13 +760,13 @@ function onTabActivated(activeInfo)
     let thisWinData = windowData.get(activeInfo.windowId);
     thisWinData.lastActiveTabId = activeInfo.tabId;
 
-    console.debug(CONSOLE_PREFIX + ">>>>>> onActivated tab id:", activeInfo.tabId);
+    console.debug(CONSOLE_PREFIX + " >>> onActivated tab id:", activeInfo.tabId);
 
     isContentScriptActive(activeInfo.tabId).then((isInjected) =>
     {
         if (isInjected)
         {
-            console.debug(`${CONSOLE_PREFIX}Activated tab ${activeInfo.tabId} already has content script injected`);
+            console.debug(`${CONSOLE_PREFIX} Activated tab ${activeInfo.tabId} already has content script injected`);
 
             // we might have triggered a collapse-and-move from clicking a system tab and then have switched to this tab
             // so we cancel any ticking timers
@@ -761,7 +776,7 @@ function onTabActivated(activeInfo)
 
         if (!DYNAMIC_INJECTS)
         {
-            console.warn(`${CONSOLE_PREFIX}Activated tab ${activeInfo.tabId} has no content script injected and dynamic injects are disabled`);
+            console.warn(`${CONSOLE_PREFIX} Activated tab ${activeInfo.tabId} has no content script injected and dynamic injects are disabled`);
             onActivateUninjectableTab(activeInfo.tabId);
             return;
         }
@@ -783,18 +798,18 @@ function onTabActivated(activeInfo)
                     case "Extension manifest must request permission to access this host":
                         // the last one tends to happen when a chrome:// URL tab is not yet loaded when activated
 
-                        console.log(`${CONSOLE_PREFIX}Expected error injecting into tab ${activeInfo.tabId}:`, chrome.runtime.lastError.message);
+                        console.log(`${CONSOLE_PREFIX} Expected error injecting into tab ${activeInfo.tabId}:`, chrome.runtime.lastError.message);
                         break;
                     // unexpected injection fails:
                     default:
-                        console.error(`${CONSOLE_PREFIX}Unexpected error injecting into tab ${activeInfo.tabId} :`, chrome.runtime.lastError.message);
+                        console.error(`${CONSOLE_PREFIX} Unexpected error injecting into tab ${activeInfo.tabId}:`, chrome.runtime.lastError.message);
                 }
 
                 onActivateUninjectableTab(activeInfo.tabId);
             }
             else
             {
-                console.log(CONSOLE_PREFIX + "Content script injected into activated tab", activeInfo.tabId);
+                console.log(CONSOLE_PREFIX + " Content script injected into activated tab", activeInfo.tabId);
             }
         });
     });
@@ -813,7 +828,7 @@ function onTabUpdated(tabId, changeInfo)
         {
             if (isInjected)
             {
-                console.log(`${CONSOLE_PREFIX}>>>>>> Injected tab ${tabId} moved to group ${changeInfo.groupId} - ignoring`)
+                console.log(`${CONSOLE_PREFIX} >>> Injected tab ${tabId} moved to group ${changeInfo.groupId} - ignoring`)
                 // we don't need to take any action on update of a tab with the content script injected
                 // because the content script will collapse the tab groups on mouse entering the content area
                 return;
@@ -822,15 +837,15 @@ function onTabUpdated(tabId, changeInfo)
             // non-injected tab..
             if (changeInfo.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
             {
-                // the tab wasn't made groupless
-                console.log(CONSOLE_PREFIX + `>>>>>> Uninjected tab ${tabId} moved to group ${changeInfo.groupId}`);
+                // the tab wasn't ungrouped
+                console.log(`${CONSOLE_PREFIX} >>> Uninjected tab ${tabId} moved to group ${changeInfo.groupId}`);
 
                 // fetch tab object
                 chrome.tabs.get(tabId, (tab) =>
                 {
                     if (chrome.runtime.lastError)
                     {
-                        console.error(CONSOLE_PREFIX + "Failed to get updated tab " + tabId, chrome.runtime.lastError);
+                        console.error(`${CONSOLE_PREFIX} Failed to get updated tab ${tabId}`, chrome.runtime.lastError);
                         return;
                     }
 
@@ -839,11 +854,11 @@ function onTabUpdated(tabId, changeInfo)
                     //   if the moved tab isn't the active tab, the new group will stay collapsed
                     if (tab.active)
                     {
-                        scheduleCompactOtherGroups(tab, userOptions.collapseDelayOnActivateUninjectedTabMs);
+                        scheduleCompactOtherGroups(tab, userOptions.delayCompactOnActivateUninjectedTabMs);
                     }
                     else
                     {
-                        console.log(CONSOLE_PREFIX + "Regrouped tab is not the active tab.  Ignoring.");
+                        console.log(CONSOLE_PREFIX + " Regrouped tab is not the active tab.  Ignoring.");
                     }
                 });
             }
@@ -868,7 +883,7 @@ function onTabCreated(newTab)
     // we immediately grab this before onActivated runs for this tab and updates it with this new tab's ID
     let lastActiveTabId = windowData.get(newTab.windowId).lastActiveTabId;
 
-    console.log(`${CONSOLE_PREFIX}>>>>>> Tab created: ${newTab.id} in window ${newTab.windowId}`, newTab);
+    console.log(`${CONSOLE_PREFIX} >>> New tab ${newTab.id} created in window ${newTab.windowId}`, newTab);
 
     isContentScriptActive(newTab.id).then((isInjected) =>
     {
@@ -884,7 +899,7 @@ function onTabCreated(newTab)
 
     if (newTab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
     {
-        console.log(CONSOLE_PREFIX + "Newly created tab is already in a group - ignoring");
+        console.log(CONSOLE_PREFIX + " Newly created tab is already in a group - ignoring");
         return;
     }
 
@@ -895,14 +910,14 @@ function onTabCreated(newTab)
         {
             if (chrome.runtime.lastError)
             {
-                console.error(CONSOLE_PREFIX + "Error 're-getting' tab:", chrome.runtime.lastError);
+                console.error(CONSOLE_PREFIX + " Error 're-getting' tab:", chrome.runtime.lastError);
                 return;
             }
 
             // If tab has NOW been assigned a group, skip grouping
             if (newTab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
             {
-                console.log(CONSOLE_PREFIX + `Tab ${newTab.id} has been auto-grouped into group ${newTab.groupId} by browser or something else`);
+                console.log(`${CONSOLE_PREFIX} Tab ${newTab.id} has been auto-grouped into group ${newTab.groupId} (by browser?)`);
                 return;
             }
 
@@ -914,7 +929,7 @@ function onTabCreated(newTab)
 
                 if (isFallback)
                 {
-                    console.log(CONSOLE_PREFIX + "Ignoring fallback tab")
+                    console.log(CONSOLE_PREFIX + " Ignoring fallback tab")
                     return;
                 }
 
@@ -922,7 +937,7 @@ function onTabCreated(newTab)
                 {
                     if (lastActiveTabId === newTab.id)
                     {
-                        console.warn(CONSOLE_PREFIX + "New tab is the also the last active tab in the window.");
+                        console.warn(CONSOLE_PREFIX + " New tab is the also the last active tab in the window.");
                         return;
                     }
 
@@ -931,13 +946,13 @@ function onTabCreated(newTab)
                     {
                         if (chrome.runtime.lastError)
                         {
-                            console.error(CONSOLE_PREFIX + "Error retrieving tab " + lastActiveTabId + ": ", chrome.runtime.lastError);
+                            console.error(`${CONSOLE_PREFIX} Error retrieving tab ${lastActiveTabId}: `, chrome.runtime.lastError);
                             return;
                         }
 
                         if (prevActiveTab && prevActiveTab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
                         {
-                            console.log(CONSOLE_PREFIX + `Adding new tab (${newTab.id}) to group of last tab (${prevActiveTab.groupId})`);
+                            console.log(`${CONSOLE_PREFIX} Adding new tab (${newTab.id}) to group of last tab (${prevActiveTab.groupId})`);
 
                             // Add the new tab to the group of the last focused tab
                             // NOTE: this will trigger the onUpdated event and therefore run collapseOtherGroups()
@@ -945,20 +960,20 @@ function onTabCreated(newTab)
                             {
                                 if (chrome.runtime.lastError)
                                 {
-                                    console.error(CONSOLE_PREFIX + "Error grouping new tab", chrome.runtime.lastError);
+                                    console.error(CONSOLE_PREFIX + " Error grouping new tab", chrome.runtime.lastError);
                                 }
                             });
                         }
                         else
                         {
-                            console.log(CONSOLE_PREFIX + "No group found for last active tab " + prevActiveTab.id);
+                            console.log(CONSOLE_PREFIX + " No group found for last active tab " + prevActiveTab.id);
                         }
                     });
                 }
                 else
                 {
                     // maybe a brand new window.  just let the new tab be where it is
-                    console.log(CONSOLE_PREFIX + "No last focused tab found for window " + newTab.windowId);
+                    console.log(CONSOLE_PREFIX + " No last focused tab found for window " + newTab.windowId);
                 }
 
             });
@@ -975,7 +990,7 @@ function onTabCreated(newTab)
 //
 function onStorageChanged(changes, areaName)
 {
-    console.log(CONSOLE_PREFIX + '>>>>>> storage.OnChanged', changes, areaName);
+    console.log(CONSOLE_PREFIX + ' >>> storage.OnChanged', changes, areaName);
 
     if (areaName === 'sync')
     {
@@ -993,18 +1008,18 @@ function onStorageChanged(changes, areaName)
             if (changes[changedPropertyName].newValue !== undefined)
             {
                 // item changed or added to the storage
-                console.log(`${CONSOLE_PREFIX}storage updating ${changedPropertyName} to`, changes[changedPropertyName].newValue);
+                console.log(`${CONSOLE_PREFIX} storage updating ${changedPropertyName} to`, changes[changedPropertyName].newValue);
                 userOptions[changedPropertyName] = changes[changedPropertyName].newValue;
             }
             else
             {
                 // an item was removed from the storage
-                console.log(`${CONSOLE_PREFIX}storage removing: ${changedPropertyName}`);
+                console.log(`${CONSOLE_PREFIX} storage removing: ${changedPropertyName}`);
                 delete userOptions[changedPropertyName];
             }
         }
 
-        console.log(CONSOLE_PREFIX + "userOptions updated:", userOptions);
+        console.log(CONSOLE_PREFIX + " userOptions updated:", userOptions);
     }
 }
 
@@ -1013,7 +1028,7 @@ function onStorageChanged(changes, areaName)
 function onSuspend()
 {
     deregisterListeners();
-    console.log(CONSOLE_PREFIX + "Listeners deregistered");
+    console.log(CONSOLE_PREFIX + " Listeners deregistered");
 }
 
 
@@ -1059,7 +1074,7 @@ let browserStartingUp = false;
 chrome.runtime.onStartup.addListener(() =>
 {
     // Initialization code for startup scenarios
-    console.log(CONSOLE_PREFIX + ">>>>>> Browser is starting up.  Sleeping for " + LISTEN_DELAY_ON_BROWSER_STARTUP_MS + " ms before registering listeners.");
+    console.log(CONSOLE_PREFIX + " >>> Browser is starting up.  Sleeping for " + LISTEN_DELAY_ON_BROWSER_STARTUP_MS + " ms before registering listeners.");
     browserStartingUp = true;
     setTimeout(registerListeners, LISTEN_DELAY_ON_BROWSER_STARTUP_MS);
 });
@@ -1069,7 +1084,7 @@ chrome.runtime.onStartup.addListener(() =>
 chrome.storage.sync.get(DEFAULT_OPTIONS, (options) =>
 {
     userOptions = options;
-    console.log(CONSOLE_PREFIX + "Options read from storage:", userOptions);
+    console.log(CONSOLE_PREFIX + " Options read from storage:", userOptions);
 });
 
 
@@ -1077,13 +1092,13 @@ setTimeout(() =>
 {
     if (!browserStartingUp)
     {
-        console.log(CONSOLE_PREFIX + ">>>>>> Browser doesn't seem to be starting up.  Registering listeners now.");
+        console.log(CONSOLE_PREFIX + " >>> Browser doesn't seem to be starting up.  Registering listeners now.");
         registerListeners();
     }
 }, ON_STARTUP_WAIT_TIMEOUT_MS);
 
 
-console.log(CONSOLE_PREFIX + "Extension loaded. Waiting for browser-based onStartup event for " + ON_STARTUP_WAIT_TIMEOUT_MS + " ms...");
+console.log(CONSOLE_PREFIX + " Extension loaded. Waiting for browser-based onStartup event for " + ON_STARTUP_WAIT_TIMEOUT_MS + " ms...");
 
 /*
 console.debug("this is console.debug", console); // shows with chromium "Verbose"

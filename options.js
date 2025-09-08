@@ -1,17 +1,17 @@
-import { DEFAULT_OPTIONS } from './shared.js';
+import { DEFAULT_OPTIONS, CONSOLE_PREFIX } from './shared.js';
 
 document.addEventListener('DOMContentLoaded', function ()
 {
     // Load saved options
     chrome.storage.sync.get(DEFAULT_OPTIONS, function (options)
     {
-        console.log("Updating HTML to match options...", options);
+        console.log(`${CONSOLE_PREFIX} Updating HTML to match options...`, options);
 
         // update the HTML to match the options
-        document.getElementById('collapseOthersWithGrouplessTab').checked = options.collapseOthersWithGrouplessTab;
+        document.getElementById('doCompactOnActivateUngroupedTab').checked = options.doCompactOnActivateUngroupedTab;
         document.getElementById('alignActiveTabGroup').value = options.alignActiveTabGroup;
-        document.getElementById('collapseDelayOnEnterContentAreaMs').value = options.collapseDelayOnEnterContentAreaMs;
-        document.getElementById('collapseDelayOnActivateUninjectedTabMs').value = options.collapseDelayOnActivateUninjectedTabMs;
+        document.getElementById('delayCompactOnEnterContentAreaMs').value = options.delayCompactOnEnterContentAreaMs;
+        document.getElementById('delayCompactOnActivateUninjectedTabMs').value = options.delayCompactOnActivateUninjectedTabMs;
         document.getElementById('autoGroupNewTabs').checked = options.autoGroupNewTabs;
     });
 
@@ -21,12 +21,10 @@ document.addEventListener('DOMContentLoaded', function ()
         event.preventDefault();
 
         let optionsToSave = {
-            collapseOthersWithGrouplessTab: document.getElementById('collapseOthersWithGrouplessTab').checked,
-
+            doCompactOnActivateUngroupedTab: document.getElementById('doCompactOnActivateUngroupedTab').checked,
             alignActiveTabGroup: parseInt(document.getElementById('alignActiveTabGroup').value, 10),
-            collapseDelayOnEnterContentAreaMs: parseInt(document.getElementById('collapseDelayOnEnterContentAreaMs').value, 10),
-            collapseDelayOnActivateUninjectedTabMs: parseInt(document.getElementById('collapseDelayOnActivateUninjectedTabMs').value, 10),
-
+            delayCompactOnEnterContentAreaMs: parseInt(document.getElementById('delayCompactOnEnterContentAreaMs').value, 10),
+            delayCompactOnActivateUninjectedTabMs: parseInt(document.getElementById('delayCompactOnActivateUninjectedTabMs').value, 10),
             autoGroupNewTabs: document.getElementById('autoGroupNewTabs').checked
         }
 

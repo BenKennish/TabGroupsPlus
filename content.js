@@ -1,6 +1,9 @@
 // Tab Groups Plus
 // content script
 
+// cannot use import statements in content script as it's not a module
+//import { CONSOLE_PREFIX } from './shared.js';
+
 if (!window.isInjected)
 {
     window.isInjected = true;
@@ -47,12 +50,12 @@ if (!window.isInjected)
         document.documentElement.removeEventListener('mouseenter', handleMouseEnter);
         document.documentElement.removeEventListener('mouseleave', handleMouseLeave);
         chrome.runtime.onMessage.removeListener(pingHandler);
-        console.log('[TabGroupsPlus] listeners removed');
+        console.log('[TGP] Listeners removed');
     });
 
-    console.log('[TabGroupsPlus] Content script loaded');
+    console.log('[TGP] Content script loaded');
 }
 else
 {
-    console.log('[TabGroupsPlus] Content script already loaded');
+    console.log('[TGP] Content script already loaded');
 }
