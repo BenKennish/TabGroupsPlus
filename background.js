@@ -440,7 +440,7 @@ async function compactGroups(activeTab)
 
 
     // ==================================================================
-    // (5) finally, move all the UNGROUPED tabs to the very left/right, preserving their order
+    // (5) finally, move all the UNGROUPED tabs to the very right, preserving their order
     // ==================================================================
 
     // a, b, c are ungrouped tabs
@@ -458,27 +458,31 @@ async function compactGroups(activeTab)
     // (4) move all the ungrouped tabs to the leftmost or rightmost position
     // grab all the ungrouped tabs in the window (hopefully will be sorted by left->right position)
 
-    // ============== DISABLED FOR A WHILE
-    /*
-    const ungroupedTabs = await chrome.tabs.query({ windowId: activeTab.windowId, groupId: chrome.tabGroups.TAB_GROUP_ID_NONE });
+    let ungroupedTabs;
 
-    if (chrome.runtime.lastError)
+    try
     {
-        console.error(CONSOLE_PREFIX + chrome.runtime.lastError);
+        // is this list sorted in left-to-right order?
+        ungroupedTabs = await chrome.tabs.query({ windowId: activeTab.windowId, groupId: chrome.tabGroups.TAB_GROUP_ID_NONE });
+    }
+    catch (err)
+    {
+        console.error(CONSOLE_PREFIX + " Error retrieving ungrouped tabs", err);
         return;
     }
-
+    /*
     if (userOptions.alignActiveTabGroup === ALIGN.RIGHT)
     {
         // process ungrouped tabs in right-to-left order as we move them to the leftmost position
         ungroupedTabs.reverse();
     }
+    */
 
     for (let i = 0; i < ungroupedTabs.length; i++)
     {
         const ungroupedTab = ungroupedTabs[i];
 
-        await chrome.tabs.move(ungroupedTab.id, { index: tabIndexToMoveTo }, () =>
+        await chrome.tabs.move(ungroupedTab.id, { index: ALIGN.RIGHT }, () =>
         {
             if (chrome.runtime.lastError)
             {
@@ -487,7 +491,7 @@ async function compactGroups(activeTab)
         });
 
     };
-    */
+
 
 }
 
