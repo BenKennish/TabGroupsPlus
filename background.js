@@ -325,12 +325,13 @@ async function compactGroups(activeTab)
 
     // we've now collapsed (or tried to collapse) all the groups except the active one
 
-    // if we are not aligning the active tab group after collapsing, we're done
+    // if we are not configured to aligni the active tab group after collapsing, we're done
     if (userOptions.alignActiveTabGroup === ALIGN.DISABLED)
     {
         console.log(CONSOLE_PREFIX + " Aligning of active tab group is disabled.  All done");
         return;
     }
+
 
     // ==================================================================
     // (2) restore the position of the *previously* active group (if there is one)
@@ -396,9 +397,7 @@ async function compactGroups(activeTab)
 
         if (null !== tabIndexToMoveTo)  // proper null test necesary, tabIndexToMoveTo could be 0 and valid
         {
-
             // move the group to the new location
-
             /*
             try {
                 await new Promise((resolve, reject) =>
