@@ -736,7 +736,7 @@ function onRuntimeMessage(message, sender, sendResponse)
             }
             else if (!contentTab.active)
             {
-                console.error(CONSOLE_PREFIX + ' Mouse somehow ' + (isMouseInContentArea ? 'entered' : 'left') + 'content area of a non-active tab - witchcraft?!', contentTab);
+                console.error(CONSOLE_PREFIX + ' Mouse somehow ' + (isMouseInContentArea ? 'entered' : 'left') + ' the content area of a non-active tab - witchcraft?!', contentTab);
                 sendResponse({ status: "failed" });
                 return;
             }
