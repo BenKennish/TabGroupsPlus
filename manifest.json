@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "Tab Groups Plus",
     "short_name": "Tab Groups +",
-    "version": "1.4.1",
+    "version": "1.4.2",
     "version_name": "",
     "description": "Auto-collapses tab groups that don't contain that window's active tab, and adds new tabs to the currently active tab's group", // max 132 chars
     "author": "ben@kennish.net",
@@ -27,12 +27,12 @@
     "content_scripts": [
         {
             "matches": [
-                "<all_urls>" // used to be "*://*/*"
+                "<all_urls>" // any URL that starts with a permitted scheme
             ],
             "js": [
                 "content.js"
             ],
-            "run_at": "document_start"
+            "run_at": "document_start" // inject script as early as possible
         }
     ],
     "options_ui": {
@@ -42,6 +42,6 @@
     "action": {
         "default_title": "Tab Groups Plus"
     },
-    "incognito": "split",
+    "incognito": "split", // cannot inject with "spanning"
     "minimum_chrome_version": "89" //checked with Copilot
 }
