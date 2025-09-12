@@ -655,6 +655,23 @@ function onRuntimeMessage(message, sender, sendResponse)
             else if (isMouseInContentArea)
             {
                 console.debug(CONSOLE_PREFIX + ' Mouse entered contentTab', contentTab);
+
+                let winData = windowData.get(contentTab.windowId);
+
+                if (!winData)
+                {
+                    console.error(CONSOLE_PREFIX + ' No window data for windowId', contentTab.windowId);
+                    return;
+                }
+
+                if (contentTab.groupId === winData.activeGroupId)
+                {
+                    console.debug(CONSOLE_PREFIX + ' Tab is already in the active group - taking no further action');
+                    return;
+                }
+
+
+
                 scheduleCompactOtherGroups(contentTab, userOptions.delayCompactOnEnterContentAreaMs);
             }
             else  // isMouseInContentArea is false
