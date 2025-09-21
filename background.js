@@ -371,6 +371,12 @@ async function compactGroups(activeTab)
 
     if (prevActiveGroupOldPos !== null && prevActiveGroupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
     {
+
+        if (prevActiveGroupOldPos === 0)
+        {
+            console.warn(CONSOLE_PREFIX + " Previously active group old position was 0");
+        }
+
         let prevActiveGroup = null;
         try
         {
