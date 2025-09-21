@@ -80,8 +80,25 @@ function getWindowData(windowId)
     {
         if (!windowData.has(windowId))
         {
+            // this bit could probably be all done using one .set()
             windowData.set(windowId, { ...newWindowDataObj });
-            console.log(`${CONSOLE_PREFIX} Initialized windowData entry for window ${windowId}`);
+            let winData = windowData.get(windowId);
+
+            if (userOptions.alignActiveTabGroup === ALIGN.LEFT)
+            {
+                getTabGroupsOrdered(windowId, chrome.tabGroups.TAB_GROUP_ID_NONE).then((groupsOrdered) =>
+                {
+                    // pretend the leftmost tabgroup was the last active one and was previously in position 1 (0 is where the new active group will be moved to)
+                    winData.activeGroupId = groupsOrdered.length > 0 ? groupsOrdered[0].id : chrome.tabGroups.TAB_GROUP_ID_NONE;
+                    winData.activeGroupOldPos = 1;
+
+                    console.log(`${CONSOLE_PREFIX} Initialized windowData entry for window ${windowId}`);
+                });
+            }
+            else
+            {
+                console.warn(`${CONSOLE_PREFIX} alignActiveTabGroup is not ALIGN.LEFT, not sensibly initializing windowData`);
+            }
         }
         return windowData.get(windowId);
     }
@@ -403,7 +420,7 @@ async function compactGroups(activeTab)
 
 
         // retrive the tab group that's currently occupying the group pos index where the previously active group was
-        if (groupsOrdered[prevActiveGroupOldPos] !== null)
+        if (groupsOrdered[prevActiveGroupOldPos])
         {
             // there's a group located in the group index pos where we want to return this group
             // this group will be bumped one place to the right after the move
@@ -1130,6 +1147,24 @@ function onSuspend()
 }
 
 
+
+function initAllWindowData()
+{
+    // i don't think 'popup' windows can have tabs or tab groups
+    chrome.windows.getAll({ populate: false, windowTypes: ['normal'] }).
+        then((windows) =>
+        {
+            windows.forEach((win) =>
+            {
+                getWindowData(win.id);  // this returns the windowData object, creating it if necessary
+            });
+        }).catch((err) =>
+        {
+            console.error(CONSOLE_PREFIX + " Failed to retrieve windows for initialization:", err);
+        });
+}
+
+
 // register our listeners
 //
 function registerListeners()
@@ -1143,6 +1178,9 @@ function registerListeners()
 
     browserStartingUp = false;
     console.log(CONSOLE_PREFIX + " Listeners registered");
+
+    initAllWindowData();
+    console.log(CONSOLE_PREFIX + " Window data initialized for all windows");
 }
 
 
