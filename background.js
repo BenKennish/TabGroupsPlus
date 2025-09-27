@@ -93,6 +93,9 @@ function getWindowData(windowId)
                     winData.activeGroupOldPos = 1;
 
                     console.log(`${CONSOLE_PREFIX} Initialized windowData entry for window ${windowId}`);
+                }).catch((err) =>
+                {
+                    console.error('Error retrieving ordered tab groups in getWindowData()', err);
                 });
             }
             else
