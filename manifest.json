@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "Tab Groups Plus",
     "short_name": "Tab Groups +",
-    "version": "1.4.2",
+    "version": "1.4.3",
     "version_name": "",
     "description": "Auto-collapses tab groups that don't contain that window's active tab, and adds new tabs to the currently active tab's group", // max 132 chars
     "author": "ben@kennish.net",
