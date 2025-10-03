@@ -44,6 +44,8 @@ let userOptions = {};
 // map window ID to object about that window (see newWindowDataObj below)
 // each object is proxied so that any changes automatically trigger a save to
 // local storage (chrome.storage.local)
+//
+// consider private and use getWindowData() to access it and saveWindowData() to save it to local storage
 let globalWindowDataMap = new Map();
 
 
@@ -68,16 +70,6 @@ const newWindowDataObj = {
 };
 
 
-const autoSaveHandler = {
-    set(target, prop, value)
-    {
-        //console.log('Auto save handler triggered:', prop, value);
-        target[prop] = value;
-        saveWindowData();
-        return true;
-    }
-}
-
 
 // ============================================================================
 // ============================================================================
@@ -98,11 +90,6 @@ function getWindowData(windowId)
 
             const thisWindowData = { ...newWindowDataObj };
 
-            // attach a method to each object within windowData map, so that you can do something like:
-            // getWindowData(winId).update( x => { x.activeGroupId = 59; x.activeGroupOldPos = 2; ... })
-            // and then this is how we update it rather than directly changing properties on the globalWindowDataMap object
-            thisWindowData.update = (updateFunc) => { updateFunc(this); saveWindowData(); }   // attach the update method to this object
-
             globalWindowDataMap.set(windowId, thisWindowData);
 
             if (userOptions.alignActiveTabGroup === ALIGN.LEFT)
@@ -115,6 +102,7 @@ function getWindowData(windowId)
                     thisWindowData.activeGroupOldPos = 0;
 
                     console.log(`${CONSOLE_PREFIX} Initialized windowData entry for window ${windowId}`);
+
 
                 }).catch((err) =>
                 {
@@ -239,7 +227,9 @@ function cancelCompactTimer(windowId)
     if (thisWindowData.compactTimer)
     {
         clearTimeout(thisWindowData.compactTimer);
-        thisWindowData.update(() => { this.compactTimer = null; })
+        thisWindowData.compactTimer = null;
+        saveWindowData();
+
         console.debug(`${CONSOLE_PREFIX} Cleared compact timer for window:`, windowId);
     }
 }
@@ -530,8 +520,10 @@ async function compactGroups(activeTab)
 
     // we've now returned (or failed to return) the previously active group
     // into the correct place so we clear the record
+
     thisWindowData.activeGroupId = chrome.tabGroups.TAB_GROUP_ID_NONE;
     thisWindowData.activeGroupOldPos = null;
+    saveWindowData();
 
     if (activeTab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE)
     {
@@ -565,17 +557,17 @@ async function compactGroups(activeTab)
         }
 
         thisWindowData.activeGroupId = activeTab.groupId;
-
-        // FIXME: did we just save to local storage twice?
+        saveWindowData();
     }
     catch (err)
     {
         console.error(`${CONSOLE_PREFIX} Failed to retrieve ordered tab groups in window ${activeTab.windowId}.  Resetting windowData`, err);
         thisWindowData.activeGroupId = chrome.tabGroups.TAB_GROUP_ID_NONE;
         thisWindowData.activeGroupOldPos = null;
+        saveWindowData();
     }
 
-    console.log(`${CONSOLE_PREFIX} Updated windowData:`, thisWindowData);
+    console.log(`${CONSOLE_PREFIX} Updated windowData after step (3):`, thisWindowData);
 
     // ==================================================================
     // (4) position the new active `group` to the very left or very right
@@ -678,6 +670,7 @@ function scheduleCompactOtherGroups(tab, delayMs)
     {
         // delete the timer as we're now running
         thisWindowData.compactTimer = null;
+        saveWindowData();
 
         try
         {
@@ -689,6 +682,7 @@ function scheduleCompactOtherGroups(tab, delayMs)
         }
 
     }, delayMs);
+    saveWindowData();
 
 }
 
@@ -883,6 +877,7 @@ function onTabActivated(activeInfo)
 
     let thisWinData = getWindowData(activeInfo.windowId);
     thisWinData.lastActiveTabId = activeInfo.tabId;
+    saveWindowData();
 
     console.debug(CONSOLE_PREFIX + " >>> onActivated tab id:", activeInfo.tabId);
 
@@ -1161,10 +1156,9 @@ function onStorageChanged(changes, areaName)
 
 
 // called to save the globalWindowDataMap to local storage
-// getWindowData() returns proxied objects so this function is called automatically upon modifying those objects
 function saveWindowData()
 {
-    // Convert each Proxy back to a plain object
+    // Convert each element back to a plain object
     const winDataProperties = Array.from(globalWindowDataMap.entries()).map(([winId, winData]) =>
     {
         return [winId, { ...winData }]; // spread (...) copies only own properties, no methods
@@ -1194,23 +1188,7 @@ function onSuspend()
 }
 
 
-function initAllWindowData()
-{
-    // i don't think 'popup' windows can have tabs or tab groups
-    chrome.windows.getAll({ populate: false, windowTypes: ['normal'] }).
-        then((windows) =>
-        {
-            windows.forEach((win) =>
-            {
-                getWindowData(win.id);  // this returns the windowData object, creating it if necessary
-            });
 
-        }).catch((err) =>
-        {
-            console.error(CONSOLE_PREFIX + " Failed to retrieve windows for initialization:", err);
-        });
-
-}
 
 
 
@@ -1270,30 +1248,24 @@ function startUp()
             {
                 console.log(CONSOLE_PREFIX + " Retrieved windowData from local storage", result.windowData);
 
-                // TODO: check each window is actively running and remove any that aren't
+                // look at all the current windows
                 chrome.windows.getAll({ populate: false, windowTypes: ['normal'] }).then((allWindows) =>
                 {
                     const allWindowIds = allWindows.map(win => win.id);
 
-                    // wrap each windowData object in a Proxy so that changes to it are auto-saved
-                    globalWindowDataMap = new Map(
-                        result.windowData.flatMap(([winId, winData]) =>
-                        {
-                            // TODO: if window with winId does not exist, return [] to skip it
+                    // FIXME: what if a window just happens to have the same ID as a previously closed window?
 
-                            if (allWindowIds.includes(winId))
-                            {
-                                return [winId, new Proxy(winData, autoSaveHandler)];
-                            }
-                            else
-                            {
-                                // the flat part of the flatMap will remove this entry
-                                console.log(CONSOLE_PREFIX + ` Skipping windowData for non-existent window ${winId}`);
-                                return [];
-                            }
-                        }));
+                    // filter out all entries for windows that no longer exist
+                    globalWindowDataMap = new Map(result.windowData.filter(([winId, winData]) => { allWindowIds.includes(winId); }));
 
-                    console.log(CONSOLE_PREFIX + " windowData restored:", globalWindowDataMap);
+                    allWindows.forEach((win) =>
+                    {
+                        getWindowData(win.id);  // this will initialise windowData objects for any window with IDs not already present
+                    });
+
+                    saveWindowData();  // save the pruned and initialised windowData back to local storage
+                    console.log(CONSOLE_PREFIX + " Finished pruning and initialising windowData:", globalWindowDataMap);
+
                 });
 
             }
@@ -1306,12 +1278,6 @@ function startUp()
         {
             console.error(CONSOLE_PREFIX + " Failed to retrieve windowData from local storage:", err);
         })
-        .finally(() =>
-        {
-            // will not overwrite existing windowData entries
-            console.log(CONSOLE_PREFIX + " Initialising windowData initiated for any unknown windows");
-            initAllWindowData();
-        });
 
 }
 
