@@ -7,7 +7,8 @@ document.addEventListener('DOMContentLoaded', function ()
     {
         console.log(`${CONSOLE_PREFIX} Updating HTML controls to match options object...`, options);
 
-        document.getElementById('doCompactOnActivateUngroupedTab').checked = options.doCompactOnActivateUngroupedTab;
+        document.getElementById('compactOnActivateUngroupedTab').checked = options.compactOnActivateUngroupedTab;
+        document.getElementById('collapsePreviousActiveGroupOnActivateUngroupedTab').checked = options.collapsePreviousActiveGroupOnActivateUngroupedTab;
         document.getElementById('alignActiveTabGroup').value = options.alignActiveTabGroup;
         document.getElementById('delayCompactOnEnterContentAreaMs').value = options.delayCompactOnEnterContentAreaMs;
         document.getElementById('delayCompactOnActivateUninjectedTabMs').value = options.delayCompactOnActivateUninjectedTabMs;
@@ -21,8 +22,9 @@ document.addEventListener('DOMContentLoaded', function ()
 
         event.preventDefault();
 
-        let optionsToSave = {
-            doCompactOnActivateUngroupedTab: document.getElementById('doCompactOnActivateUngroupedTab').checked,
+        const optionsToSave = {
+            compactOnActivateUngroupedTab: document.getElementById('compactOnActivateUngroupedTab').checked,
+            collapsePreviousActiveGroupOnActivateUngroupedTab: document.getElementById('collapsePreviousActiveGroupOnActivateUngroupedTab').checked,
             alignActiveTabGroup: parseInt(document.getElementById('alignActiveTabGroup').value, 10),
             delayCompactOnEnterContentAreaMs: parseInt(document.getElementById('delayCompactOnEnterContentAreaMs').value, 10),  // base 10
             delayCompactOnActivateUninjectedTabMs: parseInt(document.getElementById('delayCompactOnActivateUninjectedTabMs').value, 10), // base 10
@@ -31,7 +33,6 @@ document.addEventListener('DOMContentLoaded', function ()
 
         chrome.storage.sync.set(optionsToSave, () =>
         {
-
             if (chrome.runtime.lastError)
             {
                 console.error(`${CONSOLE_PREFIX} Error setting options in storage:`, chrome.runtime.lastError.message);

@@ -50,11 +50,21 @@
         </div>
 
         <div class="form-row">
-            <label for="doCompactOnActivateUngroupedTab" class="form-label">Collapse all groups on activating ungrouped
+            <label for="compactOnActivateUngroupedTab" class="form-label">Compact groups on activating an ungrouped
                 tab?</label>
-            <input type="checkbox" id="doCompactOnActivateUngroupedTab" name="doCompactOnActivateUngroupedTab"
+            <input type="checkbox" id="compactOnActivateUngroupedTab" name="compactOnActivateUngroupedTab"
                 class="form-input">
         </div>
+
+        <!-- this bit could be hidden when compactOnActivateUngroupedTab is not enabled -->
+        <div class="form-row">
+            <label for="collapsePreviousActiveGroupOnActivateUngroupedTab" class="form-label">Collapse last active group
+                on activating ungrouped
+                tab?</label>
+            <input type="checkbox" id="collapsePreviousActiveGroupOnActivateUngroupedTab"
+                name="collapsePreviousActiveGroupOnActivateUngroupedTab" class="form-input">
+        </div>
+
 
         <div class="form-row">
             <label for="autoGroupNewTabs" class="form-label">Auto group new tabs into same group as active tab?</label>

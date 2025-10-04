@@ -37,9 +37,16 @@ if (!window.isInjected)
     // to check whether the content script is hooked into the current tab
     function onMessage(message, sender, sendResponse)
     {
-        if (window.isInjected && message.action === "ping")
+        if (window.isInjected)
         {
-            sendResponse({ status: "ok" });
+            if (message.action && message.action === "ping")
+            {
+                sendResponse({ status: "pong" });
+            }
+            else
+            {
+                sendResponse({ status: "unexpected action: " + message.action});
+            }
         }
     }
     chrome.runtime.onMessage.addListener(onMessage);
