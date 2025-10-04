@@ -4,7 +4,7 @@
 // ===========================================================================
 
 // TODO: FEATURE: option to auto close tab groups that haven't been used in a while (not just collapse the group, actually *close* them)
-// doesn't seem possible as chrome API doesn't (yet) allow for closing a tab group other than just closing all its tabs
+// doesn't seem possible as chrome API doesn't (yet) allow for closing a tab group other than just closing all its tabs one-by-one
 
 // TODO: OPTIMIZATION: for any process, fetch the tab object and pass it around rather than just the tab ID (but only when necessary)
 //       will the tab object get stale?  i.e. if the tab is moved or closed?
@@ -608,11 +608,6 @@ async function compactGroups(activeTab)
             return group && group.id === activeTab.groupId;
         });
 
-        if (thisWindowData.groupActiveDuringLastCompactPrevPos === 0)
-        {
-            console.warn(`${CONSOLE_PREFIX} NEW active group (${activeTab.groupId}) is already at position 0!`);
-        }
-
         thisWindowData.groupActiveDuringLastCompactId = activeTab.groupId;
         saveWindowData();
     }
@@ -901,7 +896,7 @@ function onRuntimeMessage(message, sender, sendResponse)
 //
 function onActivateUninjectableTab(tabId)
 {
-    console.warn(`${CONSOLE_PREFIX} >>> Activated uninjectable tab ${tabId}...`);
+    console.log(`${CONSOLE_PREFIX} >>> Activated uninjectable tab ${tabId}...`);
 
     chrome.tabs.get(tabId, (activeTab) =>
     {
@@ -956,7 +951,7 @@ function onTabActivated(activeInfo)
 
         if (!DYNAMIC_INJECTS)
         {
-            console.warn(`${CONSOLE_PREFIX} Activated tab ${activeInfo.tabId} has no content script injected and dynamic injects are disabled`);
+            console.log(`${CONSOLE_PREFIX} Activated tab ${activeInfo.tabId} has no content script injected and dynamic injects are disabled`);
             onActivateUninjectableTab(activeInfo.tabId);
             return;
         }
