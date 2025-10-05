@@ -263,7 +263,6 @@ function cancelCompactTimer(windowId)
     {
         clearTimeout(thisWindowData.compactTimer);
         thisWindowData.compactTimer = null;
-        saveWindowData();  // possible not necessary
 
         console.debug(`${CONSOLE_PREFIX} Cleared compact timer for window:`, windowId);
     }
@@ -450,11 +449,6 @@ async function compactGroups(activeTab)
         thisWindowData.groupActiveDuringLastCompactId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
     {
 
-        if (thisWindowData.groupActiveDuringLastCompactPrevPos === 0)
-        {
-            console.warn(CONSOLE_PREFIX + " Previously active group old position was 0");
-        }
-
         let groupLastMovedDuringCompact;
         try
         {
@@ -577,15 +571,13 @@ async function compactGroups(activeTab)
 
     thisWindowData.groupActiveDuringLastCompactId = chrome.tabGroups.TAB_GROUP_ID_NONE;
     thisWindowData.groupActiveDuringLastCompactPrevPos = null;
-    saveWindowData();
-
 
     if (activeTab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE)
     {
         console.log(`${CONSOLE_PREFIX} Active tab is ungrouped.  All done`);
+        saveWindowData();
         return;
     }
-
 
 
     // ==================================================================
@@ -609,17 +601,16 @@ async function compactGroups(activeTab)
         });
 
         thisWindowData.groupActiveDuringLastCompactId = activeTab.groupId;
-        saveWindowData();
     }
     catch (err)
     {
         console.error(`${CONSOLE_PREFIX} Failed to retrieve ordered tab groups in window ${activeTab.windowId}.  Resetting windowData`, err);
         thisWindowData.groupActiveDuringLastCompactId = chrome.tabGroups.TAB_GROUP_ID_NONE;
         thisWindowData.groupActiveDuringLastCompactPrevPos = null;
-        saveWindowData();
     }
 
     console.log(`${CONSOLE_PREFIX} Updated windowData after step (3):`, thisWindowData);
+    saveWindowData();
 
     // ==================================================================
     // (4) position the new active `group` to the very left or very right
@@ -725,7 +716,6 @@ function scheduleCompactOtherGroups(tab, delayMs)
     {
         // delete the timer as we're now running
         thisWindowData.compactTimer = null;
-        saveWindowData();
 
         try
         {
@@ -737,7 +727,6 @@ function scheduleCompactOtherGroups(tab, delayMs)
         }
 
     }, delayMs);
-    saveWindowData();
 
 }
 
