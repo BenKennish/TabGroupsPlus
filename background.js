@@ -6,6 +6,13 @@
 // TODO: FEATURE: option to auto close tab groups that haven't been used in a while (not just collapse the group, actually *close* them)
 // doesn't seem possible as chrome API doesn't (yet) allow for closing a tab group other than just closing all its tabs one-by-one
 
+// TODO: FEATURE: option to auto-group new tabs according to tab.url (we will need the 'tabs' permission).
+//       we'll need to store the name of the Tab Group as the ID can change between sessions
+
+// TODO: SECURITY: make content scripts optional
+// we can use chrome.scripting.registerContentScripts() if we have the scripting permission
+//  so perhaps we optionally request 'scripting' and put "<all_urls>"" in optional_host_permissions then
+
 // TODO: OPTIMIZATION: for any process, fetch the tab object and pass it around rather than just the tab ID (but only when necessary)
 //       will the tab object get stale?  i.e. if the tab is moved or closed?
 
@@ -13,10 +20,11 @@
 import { ALIGN, DEFAULT_OPTIONS, CONSOLE_PREFIX } from './shared.js';
 
 // timeout (ms) for receiving the browser's onStartup event
+// if we receive this in time, we know to wait longer for initialisation of windows, tabs, and groups
 const ON_STARTUP_WAIT_TIMEOUT_MS = 500;
 
 // time to wait (ms) before listening for events if the browser is starting up
-// (allow time for it to create windows, tabs, etc when restoring previous session)
+// (we allow time for it to create windows, tabs, etc when restoring previous session)
 const LISTEN_DELAY_ON_BROWSER_STARTUP_MS = 5000;
 
 // time to wait after a new tab is created before checking its group
@@ -129,13 +137,17 @@ function getWindowData(windowId)
 //
 function saveWindowData()
 {
+    // globalWindowDataMap is a Map of objects
+    // we store it as an array of objects with methods stripped
+
     // Convert each element back to a plain object
     const winDataProperties = Array.from(globalWindowDataMap.entries()).map(([winId, winData]) =>
     {
+        // TODO: we could strip out the compactTimer property here
         return [winId, { ...winData }]; // spread (...) copies only own properties, no methods
     });
 
-    // TODO: we are saving compactTimer property?  it's unnecessary i think
+
     chrome.storage.local.set({ windowData: winDataProperties })
         .then(() =>
         {
@@ -157,6 +169,8 @@ function saveWindowData()
 //
 async function isContentScriptActive(tabId)
 {
+    //return false;
+
     try
     {
         let response = await chrome.tabs.sendMessage(tabId, { action: "ping" });
@@ -828,6 +842,8 @@ async function isFallbackTab(newTab)
 function onRuntimeMessage(message, sender, sendResponse)
 {
 
+    //return;
+
     switch (message.action)
     {
         case 'mouseInContentArea':
@@ -949,7 +965,7 @@ function onTabActivated(activeInfo)
         // you can comment out if DYNAMIC_INJECTS is false
         // to stop Google complaining that the manifest.json lacks 'scripting' permission
         /*
-        chrome.scripting.executeScript({ target: { tabId: activeInfo.tabId }, files: ["content.js"] }, () =>
+        chrome.scripting.executeScript({ target: { tabId: activeInfo.tabId }, files: ["content.js"], injectImmediately: true }, () =>
         {
             if (chrome.runtime.lastError)
             {

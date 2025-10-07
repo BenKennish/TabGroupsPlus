@@ -13,26 +13,27 @@ export const ALIGN = Object.freeze({
 
 export const DEFAULT_OPTIONS = Object.freeze({
 
-    // do we perform a collapse operation when the active tab is not in a group?
+    // do we perform a compact operation when the active tab is not in a group?
     compactOnActivateUngroupedTab: true,
 
     // only applies when compactOnActivateUngroupedTab is true
-    // if false, the previously active group will remain open
+    // if false, the previously active group will not be collapsed (remain expanded)
     collapsePreviousActiveGroupOnActivateUngroupedTab: false,
 
     // valid values ALIGN.LEFT, ALIGN.RIGHT, or ALIGN.DISABLED
     alignActiveTabGroup: ALIGN.LEFT,
 
-    // do we auto group new tabs into the same group as the previously active tab?
+    // upon creating a new tab (which gets activated)
+    // do we auto group it into the same group as the previously active tab?
     autoGroupNewTabs: true,
 
     // time to wait after mouse cursor entering an injected tab's content area
-    // before collapsing the other tab groups in the window
+    // before compacting the other tab groups in the window
     delayCompactOnEnterContentAreaMs: 1000,
 
     // time to wait after activating a tab that doesn't have our content script injected
-    // e.g. a system tab, before collapsing the other tab groups in the window
-    delayCompactOnActivateUninjectedTabMs: 2000
+    // (e.g. a system tab) before compacting the other tab groups in the window
+    delayCompactOnActivateUninjectedTabMs: 4000
 
 });
 

@@ -3,7 +3,7 @@ import { DEFAULT_OPTIONS, CONSOLE_PREFIX } from './shared.js';
 document.addEventListener('DOMContentLoaded', function ()
 {
     // Load saved options
-    chrome.storage.sync.get(DEFAULT_OPTIONS, function (options)
+    chrome.storage.sync.get(DEFAULT_OPTIONS, (options) =>
     {
         console.log(`${CONSOLE_PREFIX} Updating HTML controls to match options object...`, options);
 
