@@ -9,6 +9,8 @@
 // TODO: FEATURE: option to auto-group new tabs according to tab.url (we will need the 'tabs' permission).
 //       we'll need to store the name of the Tab Group as the ID can change between sessions
 
+// TODO: FEATURE: button that will store information about all groups, then tear them all down, and recreate them so that they are in the right order?  how does this affect other devices?
+
 // TODO: SECURITY: make content scripts optional
 // we can use chrome.scripting.registerContentScripts() if we have the scripting permission
 //  so perhaps we optionally request 'scripting' and put "<all_urls>"" in optional_host_permissions then
