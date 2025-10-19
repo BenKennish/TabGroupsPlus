@@ -11,7 +11,8 @@
     },
     "permissions": [
         "tabGroups",
-        "storage"
+        "storage",
+        "tabs"   // make optional
     ],
     "background": {
         "service_worker": "background.js",

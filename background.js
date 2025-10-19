@@ -49,6 +49,17 @@ let userOptions = {};
 // and call saveWindowData() to save it back to local storage
 let globalWindowDataMap = new Map();
 
+// when a new tab is created, we store the ID in here
+// and we remove it when the tab starts loading its first URL
+const tabsAwaitingFirstUrl = new Set();
+
+
+// we need to map URL patterns to tab group names
+
+const tabAutoGroupRules = [
+    { urlSearchPattern: '.guildwars2.com', tabGroupTitle: 'Guild Wars 2' }
+];
+
 
 // example of data structure within the windowData map defined above
 // this is used as a template/'constructor' for new window data objects
@@ -858,13 +869,13 @@ function onRuntimeMessage(message, sender, sendResponse)
                 sendResponse({ status: "failed" });
                 return;
             }
-            else if (!contentTab.active)
+
+            if (!contentTab.active)
             {
-                console.error(CONSOLE_PREFIX + ' Mouse somehow ' + (isMouseInContentArea ? 'entered' : 'left') + ' the content area of a non-active tab - witchcraft?!', contentTab);
-                sendResponse({ status: "failed" });
-                return;
+                console.warn(CONSOLE_PREFIX + ' Mouse ' + (isMouseInContentArea ? 'entered' : 'left') + ' the content area of a non-active tab', contentTab);
             }
-            else if (isMouseInContentArea)
+
+            if (isMouseInContentArea)
             {
                 console.debug(CONSOLE_PREFIX + ' Mouse entered contentTab', contentTab);
 
@@ -882,6 +893,7 @@ function onRuntimeMessage(message, sender, sendResponse)
             else  // isMouseInContentArea is false
             {
                 console.debug(CONSOLE_PREFIX + ' Mouse left contentTab', contentTab);
+                //console.warn(`${CONSOLE_PREFIX} Mouse left contentTab : url is ${contentTab.url}, pendingUrl is ${contentTab.pendingUrl}`);
 
                 // we cancel all the collapse operations in case they went back up to the tab list
                 cancelCompactTimer(contentTab.windowId);
@@ -932,11 +944,17 @@ function onActivateUninjectableTab(tabId)
 //
 function onTabActivated(activeInfo)
 {
+    // activeInfo is an object with
+    //  activeInfo.tabId
+    //  activeInfo.windowId
+
     if (!activeInfo.windowId)
     {
         console.error(CONSOLE_PREFIX + ' no windowId in onTabActivated');
         return;
     }
+
+    //console.warn(`${CONSOLE_PREFIX} Tab activated.  activeInfo:`, activeInfo);
 
     let thisWinData = getWindowData(activeInfo.windowId);
     thisWinData.lastActiveTabId = activeInfo.tabId;
@@ -1010,8 +1028,88 @@ function onTabActivated(activeInfo)
 // Listen for when a tab is updated, in particular when moved into a new group
 // fallback for if the content script cannot be injected into the tab contents
 //
-function onTabUpdated(tabId, changeInfo)
+function onTabUpdated(tabId, changeInfo, tab)
 {
+
+    console.debug(`${CONSOLE_PREFIX} Tab ${tabId} updated.  changeInfo:`, changeInfo, tab);
+
+
+    if (tabsAwaitingFirstUrl.has(tabId))
+    {
+        if (changeInfo.hasOwnProperty('url') && changeInfo.url)
+        {
+            // url has changed and is not falsy
+            // status may well be "loading" but thats ok
+            if (!changeInfo.url.startsWith('chrome://'))
+            {
+                console.warn(`${CONSOLE_PREFIX} New URL ${changeInfo.url} in tab: `, tab);
+                console.warn(`${CONSOLE_PREFIX} newlyOpenedtTabs set: `, tabsAwaitingFirstUrl);
+
+                // TODO: auto group this new tab depending on the URL
+
+                for (const rule of tabAutoGroupRules)
+                {
+                    if (changeInfo.url.includes(rule.urlSearchPattern))  // TODO: make this a cleverer search than .includes()
+                    {
+                        // fetch the group with name = rule.tabGroupTitle
+                        chrome.tabGroups.query({ title: rule.tabGroupTitle })
+                            .then((groups) =>
+                            {
+                                if (groups.length === 0)
+                                {
+                                    console.warn(`${CONSOLE_PREFIX} Couldn't find tab group with title "${rule.tabGroupTitle}" when attempting to auto-group`);
+                                    return;
+                                }
+
+                                if (groups.length > 1)
+                                {
+                                    console.warn(`${CONSOLE_PREFIX} Found ${groups.length} tab groups with title "${rule.tabGroupTitle}" when attempting to auto-group`);
+                                }
+
+                                // just take the first matching tab group
+                                let group = groups[0];
+
+                                chrome.tabs.group({ groupId: group.id, tabIds: tabId })
+                                    .then(() =>
+                                    {
+                                        console.log(`${CONSOLE_PREFIX} Autogrouped tab into group: `, tab, group);
+
+                                        //chrome.tabs.update(tabId, { active: true });
+                                        chrome.windows.update(group.windowId, { focused: true })
+                                            .then(() =>
+                                            {
+                                                // activate the tab
+                                                chrome.tabs.update(tabId, { active: true });
+                                            })
+                                            .catch((err) =>
+                                            {
+                                                console.warn(CONSOLE_PREFIX + "Error focusing the window containing the autogroup", err);
+                                            });
+
+                                    })
+                                    .catch((err) =>
+                                    {
+                                        console.error(CONSOLE_PREFIX + " Error auto-grouping new tab", err);
+                                    });
+
+
+                            })
+                            .catch((err) =>
+                            {
+                                console.error(`${CONSOLE_PREFIX} Error retrieving tab group with title '${rule.tabGroupTitle}':`, err);
+                            });
+
+                    }
+                    // FIXME: we might match multiple autogroup rules and we will be trying to group the tab multiple times async
+                }
+
+                // delete from our Set
+                tabsAwaitingFirstUrl.delete(tabId);
+            }
+        }
+    }
+
+
     // tab's group assignment was changed
     if (changeInfo.hasOwnProperty('groupId'))
     {
@@ -1032,6 +1130,7 @@ function onTabUpdated(tabId, changeInfo)
                 console.log(`${CONSOLE_PREFIX} >>> Uninjected tab ${tabId} moved to group ${changeInfo.groupId}`);
 
                 // fetch tab object
+                /*
                 chrome.tabs.get(tabId, (tab) =>
                 {
                     if (chrome.runtime.lastError)
@@ -1052,10 +1151,23 @@ function onTabUpdated(tabId, changeInfo)
                         console.log(CONSOLE_PREFIX + " Regrouped tab is not the active tab.  Ignoring.");
                     }
                 });
+                */
+
+                if (tab.active)
+                {
+                    scheduleCompactOtherGroups(tab, userOptions.delayCompactOnActivateUninjectedTabMs);
+                }
+                else
+                {
+                    console.log(CONSOLE_PREFIX + " Regrouped tab is not the active tab.  Ignoring.");
+                }
+
+
             }
         });
 
     };
+
 
 }
 
@@ -1066,6 +1178,10 @@ function onTabUpdated(tabId, changeInfo)
 //
 function onTabCreated(newTab)
 {
+
+    console.debug(`${CONSOLE_PREFIX} New tab created`, newTab);
+    tabsAwaitingFirstUrl.add(newTab.id);
+
     if (!userOptions.autoGroupNewTabs)
     {
         return;
