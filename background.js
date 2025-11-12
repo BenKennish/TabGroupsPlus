@@ -54,8 +54,7 @@ let globalWindowDataMap = new Map();
 const tabsAwaitingFirstUrl = new Set();
 
 
-// we need to map URL patterns to tab group names
-
+// map URL patterns to tab group names
 const tabAutoGroupRules = [
     { urlSearchPattern: '.guildwars2.com', tabGroupTitle: 'Guild Wars 2' }
 ];
@@ -848,6 +847,27 @@ async function isFallbackTab(newTab)
 }
 
 
+// return the title(s) of groups to autogroup a tab into based on the supplied url
+// in descending priority order
+// empty array if url matches none of the patterns
+//
+function getAutoGroup(url)
+{
+    const groups = [];
+
+    for (const rule of tabAutoGroupRules)
+    {
+        if (changeInfo.url.includes(rule.urlSearchPattern))  // TODO: make this a cleverer search than .includes()
+        {
+            groups.push(rule.tabGroupTitle);
+        }
+    }
+    return groups;
+}
+
+
+
+
 // define our listeners
 
 // Listen for messages from content scripts
@@ -1030,84 +1050,83 @@ function onTabActivated(activeInfo)
 //
 function onTabUpdated(tabId, changeInfo, tab)
 {
-
     console.debug(`${CONSOLE_PREFIX} Tab ${tabId} updated.  changeInfo:`, changeInfo, tab);
 
 
-    if (tabsAwaitingFirstUrl.has(tabId))
+    if (tabsAwaitingFirstUrl.has(tabId) && changeInfo.url && !changeInfo.url.startsWith('chrome://'))
     {
-        if (changeInfo.hasOwnProperty('url') && changeInfo.url)
+        // url has changed, is not falsy, and isn't a system URL
+        // status may well be "loading" but thats ok
+
+        console.warn(`${CONSOLE_PREFIX} New URL ${changeInfo.url} in tab: `, tab);
+        console.warn(`${CONSOLE_PREFIX} tabsAwaitingFirstUrl: `, tabsAwaitingFirstUrl);
+
+        // check if this tab should be auto grouped (depending on URL)
+        const autoGroupNames = getAutoGroup(changeInfo.url);
+
+        if (autoGroupNames?.length)  // if autoGroupNames is a non-empty array
         {
-            // url has changed and is not falsy
-            // status may well be "loading" but thats ok
-            if (!changeInfo.url.startsWith('chrome://'))
+            for (const groupName of autoGroupNames)
             {
-                console.warn(`${CONSOLE_PREFIX} New URL ${changeInfo.url} in tab: `, tab);
-                console.warn(`${CONSOLE_PREFIX} newlyOpenedtTabs set: `, tabsAwaitingFirstUrl);
-
-                // TODO: auto group this new tab depending on the URL
-
-                for (const rule of tabAutoGroupRules)
-                {
-                    if (changeInfo.url.includes(rule.urlSearchPattern))  // TODO: make this a cleverer search than .includes()
+                chrome.tabGroups.query({ title: groupName })
+                    .then((groups) =>
                     {
-                        // fetch the group with name = rule.tabGroupTitle
-                        chrome.tabGroups.query({ title: rule.tabGroupTitle })
-                            .then((groups) =>
-                            {
-                                if (groups.length === 0)
+                        if (groups.length === 0)
+                        {
+                            console.warn(`${CONSOLE_PREFIX} Couldn't find tab group with title "${groupName}" when attempting to auto-group`);
+                            return;
+                        }
+
+                        if (groups.length > 1)
+                        {
+                            console.warn(`${CONSOLE_PREFIX} Found multiple (${groups.length}) tab groups with title "${groupName}" when attempting to auto-group`);
+                        }
+
+                        // just take the first matching tab group
+                        let group = groups[0];
+
+                        if (tab.groupId !== group.id)
+                        {
+                            chrome.tabs.group({ groupId: group.id, tabIds: tabId })
+                                .then(() =>
                                 {
-                                    console.warn(`${CONSOLE_PREFIX} Couldn't find tab group with title "${rule.tabGroupTitle}" when attempting to auto-group`);
-                                    return;
-                                }
+                                    console.log(`${CONSOLE_PREFIX} Autogrouped tab into group: `, tab, group);
 
-                                if (groups.length > 1)
+                                    //chrome.tabs.update(tabId, { active: true });
+                                    chrome.windows.update(group.windowId, { focused: true })
+                                        .then(() =>
+                                        {
+                                            // activate the tab
+                                            chrome.tabs.update(tabId, { active: true });
+                                        })
+                                        .catch((err) =>
+                                        {
+                                            console.warn(CONSOLE_PREFIX + "Error focusing the window containing the autogroup", err);
+                                        });
+
+                                })
+                                .catch((err) =>
                                 {
-                                    console.warn(`${CONSOLE_PREFIX} Found ${groups.length} tab groups with title "${rule.tabGroupTitle}" when attempting to auto-group`);
-                                }
-
-                                // just take the first matching tab group
-                                let group = groups[0];
-
-                                chrome.tabs.group({ groupId: group.id, tabIds: tabId })
-                                    .then(() =>
-                                    {
-                                        console.log(`${CONSOLE_PREFIX} Autogrouped tab into group: `, tab, group);
-
-                                        //chrome.tabs.update(tabId, { active: true });
-                                        chrome.windows.update(group.windowId, { focused: true })
-                                            .then(() =>
-                                            {
-                                                // activate the tab
-                                                chrome.tabs.update(tabId, { active: true });
-                                            })
-                                            .catch((err) =>
-                                            {
-                                                console.warn(CONSOLE_PREFIX + "Error focusing the window containing the autogroup", err);
-                                            });
-
-                                    })
-                                    .catch((err) =>
-                                    {
-                                        console.error(CONSOLE_PREFIX + " Error auto-grouping new tab", err);
-                                    });
+                                    console.error(CONSOLE_PREFIX + " Error auto-grouping new tab", err);
+                                });
+                        }
 
 
-                            })
-                            .catch((err) =>
-                            {
-                                console.error(`${CONSOLE_PREFIX} Error retrieving tab group with title '${rule.tabGroupTitle}':`, err);
-                            });
+                    })
+                    .catch((err) =>
+                    {
+                        console.error(`${CONSOLE_PREFIX} Error retrieving tab group with title '${rule.tabGroupTitle}':`, err);
+                    });
 
-                    }
-                    // FIXME: we might match multiple autogroup rules and we will be trying to group the tab multiple times async
-                }
-
-                // delete from our Set
-                tabsAwaitingFirstUrl.delete(tabId);
             }
+            // FIXME: we might match multiple autogroup rules and we will be trying to group the tab multiple times async
+            //  should we just stop at the first matched rule?
         }
+
+        // delete from our Set
+        tabsAwaitingFirstUrl.delete(tabId);
     }
+
 
 
     // tab's group assignment was changed
