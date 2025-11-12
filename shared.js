@@ -21,7 +21,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
     collapsePreviousActiveGroupOnActivateUngroupedTab: false,
 
     // valid values ALIGN.LEFT, ALIGN.RIGHT, or ALIGN.DISABLED
-    alignActiveTabGroup: ALIGN.LEFT,
+    alignActiveTabGroup: ALIGN.DISABLED,
 
     // upon creating a new tab (which gets activated)
     // do we auto group it into the same group as the previously active tab?
@@ -29,11 +29,11 @@ export const DEFAULT_OPTIONS = Object.freeze({
 
     // time to wait after mouse cursor entering an injected tab's content area
     // before compacting the other tab groups in the window
-    delayCompactOnEnterContentAreaMs: 1000,
+    delayCompactOnEnterContentAreaMs: 250,
 
     // time to wait after activating a tab that doesn't have our content script injected
     // (e.g. a system tab) before compacting the other tab groups in the window
-    delayCompactOnActivateUninjectedTabMs: 4000
+    delayCompactOnActivateUninjectedTabMs: 3000
 
 });
 

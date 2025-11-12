@@ -1360,13 +1360,13 @@ function onStorageChanged(changes, areaName)
             if (changes[changedPropertyName].newValue !== undefined)
             {
                 // item changed or added to the storage
-                console.log(`${CONSOLE_PREFIX} storage updating ${changedPropertyName} to`, changes[changedPropertyName].newValue);
+                console.debug(`${CONSOLE_PREFIX} storage updating ${changedPropertyName} to`, changes[changedPropertyName].newValue);
                 userOptions[changedPropertyName] = changes[changedPropertyName].newValue;
             }
             else
             {
                 // an item was removed from the storage
-                console.log(`${CONSOLE_PREFIX} storage removing: ${changedPropertyName}`);
+                console.debug(`${CONSOLE_PREFIX} storage removing: ${changedPropertyName}`);
                 delete userOptions[changedPropertyName];
             }
         }

@@ -33,6 +33,12 @@
         .form-input {
             flex-grow: 1;
         }
+
+        /* Cancel button alignment */
+        .form-cancel-btn {
+            flex-grow: 1;
+            text-align: right;
+        }
     </style>
 </head>
 
@@ -43,9 +49,9 @@
         <div class="form-row">
             <label for="alignActiveTabGroup" class="form-label">Auto-align active tab group:</label>
             <select id="alignActiveTabGroup" name="alignActiveTabGroup" class="form-input">
+                <option value="42">Disabled</option>
                 <option value="0">Left</option>
                 <option value="-1">Right</option>
-                <option value="42">Disabled</option>
             </select>
         </div>
 
@@ -86,8 +92,18 @@
 
         <div class="form-spacer"></div>
 
-        <button type="submit">Save</button>
-        <button id="cancel">Cancel</button>
+        <div class="form-row">
+
+            <span>
+                <button type="submit">Save</button>
+                <button id="cancel">Cancel</button>
+            </span>
+
+            <span class="form-cancel-btn">
+                <button id="resetBtn">Reset to Default</button>
+            </span>
+
+        </div>
 
     </form>
     <script type="module" src="options.js"></script>

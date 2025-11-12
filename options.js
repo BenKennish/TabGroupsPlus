@@ -50,4 +50,44 @@ document.addEventListener('DOMContentLoaded', function ()
         event.preventDefault();
         window.close();
     });
+
+
+    // Reset options object when reset button pressed
+    document.getElementById('resetBtn').addEventListener('click', (event) =>
+    {
+        event.preventDefault();
+
+        console.log(`${CONSOLE_PREFIX} Reset button clicked - resetting options to defaults...`);
+
+        // TODO: an "are you sure?" prompt would be nice
+
+        // TODO: nuke ALL properties, even ones we don't recognise?  maybe that's rude
+
+        // nuke all properties in storage
+        chrome.storage.sync.remove(Object.keys(DEFAULT_OPTIONS))
+            .then(() =>
+            {
+                console.log(`${CONSOLE_PREFIX} All options removed.  Saving default options...`);
+
+                // we could now just reload the options panel but there will be a problem if they press cancel
+                // as none of the properties will be saved.  so we force a save of the default (reset) options
+                // before reloading the panel
+
+                chrome.storage.sync.set(DEFAULT_OPTIONS)
+                    .then(() =>
+                    {
+                        console.log(`${CONSOLE_PREFIX} Default options set.  Reloading option window to show default options...`);
+                        window.location.reload();  //FIXME: this is reloading the whole extension page, not just options.html?
+                    })
+                    .catch((error) =>
+                    {
+                        console.error(`${CONSOLE_PREFIX} Error setting default options:`, error);
+                    });
+
+            })
+            .catch((error) =>
+            {
+                console.error(`${CONSOLE_PREFIX} Error resetting options:`, error);
+            });
+    });
 });

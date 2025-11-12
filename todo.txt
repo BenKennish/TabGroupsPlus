@@ -1,0 +1,23 @@
+== BUGS ==
+- when Auto-align: Disabled, aligning ungrouped tabs to right doesn't work   <<<======###
+- Delay of 0 ms causes crash .. set minimum to 100ms
+
+== SUGGESTIONS ==
+- You can debug with the Sources tab of the Dev Console
+
+== FEATURES ==
+
+- New Option: When to compact?
+  - On click tab
+  - On move into content area
+
+- on unPIN a tab, auto group it to the last active group   <<<======###
+
+- can we define groups (by name?) that should stay not be collapsed during compact
+
+=== AUTOGROUPING FEATURES ===
+
+- auto-grouping : allow it to happen for non-new URLs (e.g. user is reusing an old tab and typing in a fresh URL for something different)
+
+- "magic" auto-grouping based on domain : e.g. multiple ungrouped tabs looking at amazon.co.uk and create a group named "amazon.co.uk"
+  Option to specify how many tabs from that site before they are grouped
