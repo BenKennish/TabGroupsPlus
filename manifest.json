@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "Tab Groups Plus",
     "short_name": "Tab Groups +",
-    "version": "1.4.5",
+    "version": "1.4.6",
     "description": "Auto-collapses inactive tab groups, aligns the active tab group, and adds new tabs to the currently active tab's group",
     "author": "ben@kennish.net",
     "homepage_url": "https://github.com/BenKennish/TabGroupsPlus",
@@ -12,7 +12,7 @@
     "permissions": [
         "tabGroups",
         "storage",
-        "tabs"   // make optional
+        "tabs" // make optional
     ],
     "background": {
         "service_worker": "background.js",
