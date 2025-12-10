@@ -94,11 +94,11 @@ const newWindowDataObj = {
 
 // retrieve data for a window, creating a new entry in the Map if necessary
 //
-function getWindowData(windowId)
+function getWindowData(windowId, forceNew = false)
 {
     try
     {
-        if (!globalWindowDataMap.has(windowId))
+        if (!globalWindowDataMap.has(windowId) || forceNew)
         {
             // initialise a new windowData object for this window
 
@@ -107,7 +107,6 @@ function getWindowData(windowId)
 
             if (userOptions.alignActiveTabGroup !== ALIGN.DISABLED)
             {
-                // set
 
                 getTabGroupsOrdered(windowId, chrome.tabGroups.TAB_GROUP_ID_NONE).then((groupsOrdered) =>
                 {
@@ -1387,7 +1386,7 @@ function onStorageChanged(changes, areaName)
 function onWindowCreated(newWindow)
 {
     console.log(CONSOLE_PREFIX + ' >>> New window was created:', newWindow);
-    //getWindowData(newWindow.id);  // no need to initialise, getWindowData() will create
+    getWindowData(newWindow.id, true);  // initialise window data and clobber any existing data
 }
 
 
