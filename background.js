@@ -642,6 +642,8 @@ async function compactGroups(activeTab)
         // ==================================================================
         console.log(CONSOLE_PREFIX + " ==== (D) Aliging active group to leftmost/rightmost...");
 
+        // FIXME: Cannot move the group to an index that is in the middle of pinned tabs.
+
         try
         {
             await chrome.tabGroups.move(activeTab.groupId, { index: userOptions.alignActiveTabGroup });
@@ -861,7 +863,7 @@ function getAutoGroup(url)
 
     for (const rule of tabAutoGroupRules)
     {
-        if (changeInfo.url.includes(rule.urlSearchPattern))  // TODO: make this a cleverer search than .includes()
+        if (url.includes(rule.urlSearchPattern))  // TODO: make this a cleverer search than .includes()
         {
             groups.push(rule.tabGroupTitle);
         }

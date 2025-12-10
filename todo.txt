@@ -1,5 +1,4 @@
 == BUGS ==
-- when Auto-align: Disabled, aligning ungrouped tabs to right doesn't work   <<<======###
 - Delay of 0 ms causes crash .. set minimum to 100ms
 
 == SUGGESTIONS ==
