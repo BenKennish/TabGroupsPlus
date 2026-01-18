@@ -19,7 +19,7 @@
 //       will the tab object get stale?  i.e. if the tab is moved or closed?
 
 
-import { ALIGN, DEFAULT_OPTIONS, CONSOLE_PREFIX } from './shared.js';
+import { ALIGN, DEFAULT_OPTIONS, CONSOLE_PREFIX, AUTO_GROUP_PATTERN_TYPE } from './shared.js';
 
 // timeout (ms) for receiving the browser's onStartup event
 // if we receive this in time, we know to wait longer for initialisation of windows, tabs, and groups
@@ -54,9 +54,19 @@ let globalWindowDataMap = new Map();
 const tabsAwaitingFirstUrl = new Set();
 
 
-// map URL patterns to tab group names
+// temporary store : map URL patterns to tab group names (should be stored in the local storage)
 const tabAutoGroupRules = [
-    { urlSearchPattern: '.guildwars2.com', tabGroupTitle: 'Guild Wars 2' }
+    {
+        urlSearchType: AUTO_GROUP_PATTERN_TYPE.HOSTNAME_CONTAINS,
+        urlSearchPattern: '.guildwars2.com',
+        tabGroupTitle: 'Guild Wars 2'
+    },
+    {
+        urlSearchType: AUTO_GROUP_PATTERN_TYPE.REGEXP,
+        urlSearchPattern: '^https?://([^/]+)/\\?test=autogroup',
+        tabGroupTitle: 'Testing',
+        regexpCompiled: null
+    }
 ];
 
 
@@ -853,7 +863,7 @@ async function isFallbackTab(newTab)
 
 
 // return the title(s) of groups to autogroup a tab into based on the supplied url
-// in descending priority order
+// (in descending priority order??)
 // empty array if url matches none of the patterns
 //
 function getAutoGroup(url)
@@ -862,9 +872,54 @@ function getAutoGroup(url)
 
     for (const rule of tabAutoGroupRules)
     {
-        if (url.includes(rule.urlSearchPattern))  // TODO: make this a cleverer search than .includes()
+        switch (rule.urlSearchType)
         {
-            groups.push(rule.tabGroupTitle);
+            case AUTO_GROUP_PATTERN_TYPE.HOSTNAME_CONTAINS:
+
+                console.debug(`${CONSOLE_PREFIX} Testing ${url} against hostname pattern:`, rule.urlSearchPattern);
+
+                const hostname = (new URL(url)).hostname;
+                if (hostname.includes(rule.urlSearchPattern))
+                {
+                    console.log(`${CONSOLE_PREFIX} URL ${url} MATCHES hostname pattern:`, rule.urlSearchPattern);
+                    groups.push(rule.tabGroupTitle);
+                }
+
+                break;
+            case AUTO_GROUP_PATTERN_TYPE.REGEXP:
+
+                console.debug(`${CONSOLE_PREFIX} Testing ${url} against regexp pattern:`, rule.urlSearchPattern);
+
+                if (rule.regexpCompiled === null)
+                {
+                    try
+                    {
+                        console.log(`${CONSOLE_PREFIX} Compiling regexp pattern:`, rule.urlSearchPattern);
+                        rule.regexpCompiled = new RegExp(rule.urlSearchPattern);
+                    }
+                    catch (err)
+                    {
+                        console.error(`${CONSOLE_PREFIX} Invalid regexp pattern in auto-group rule:`, rule.urlSearchPattern, err);
+                        rule.regexpCompiled = false;
+                    }
+                }
+
+                if (rule.regexpCompiled)
+                {
+                    if (rule.regexpCompiled.test(url))
+                    {
+                        console.log(`${CONSOLE_PREFIX} URL ${url} MATCHES regexp pattern:`, rule.urlSearchPattern);
+                        groups.push(rule.tabGroupTitle);
+                    }
+                    else
+                    {
+                        console.debug(`${CONSOLE_PREFIX} URL ${url} does NOT match regexp pattern:`, rule.urlSearchPattern);
+                    }
+                }
+
+                break;
+            default:
+                console.error(`${CONSOLE_PREFIX} Unknown urlSearchType in auto-group rule:`, rule.urlSearchType);
         }
     }
     return groups;
@@ -1508,6 +1563,8 @@ function startUp()
                     console.log(CONSOLE_PREFIX + " Finished pruning and initialising globalWindowDataMap:", globalWindowDataMap);
 
                 });
+
+                // TODO: wipe any windows from result.windowData that no longer exist
 
             }
             else

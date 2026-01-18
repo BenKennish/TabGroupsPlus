@@ -41,3 +41,9 @@ export const DEFAULT_OPTIONS = Object.freeze({
 // because it makes tracking errors down easier w.r.t line numbers
 export const CONSOLE_PREFIX = "[TGP]";
 
+
+// constant object to fake an 'enum' for the types of auto-grouping patterns
+export const AUTO_GROUP_PATTERN_TYPE = Object.freeze({
+    HOSTNAME_CONTAINS: 0,
+    REGEXP: 1
+});
