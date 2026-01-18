@@ -10,11 +10,13 @@ Add Tab Group related features to Chrome and Chromium-based web browsers (e.g. B
 
 3. Auto-groups new tabs into the currently active tab's group _(optional)_
 
-† Due to security limitations for extensions, the auto-collapsing when activating system tabs (such as those showing browser settings, the blank tab page, etc) occurs a short time after activating them.
+† Due to security-related limitations for extensions, the auto-collapsing when activating system tabs (e.g. tabs showing browser settings, the blank tab page, etc) occurs a short time after activating them.
 
 ## Installation
 
-If you want to download the extension from the [GitHub repo](https://github.com/BenKennish/TabGroupsPlus/),
+The extension has a [page on the Chome Web Store](https://chromewebstore.google.com/detail/tab-groups-plus/ddfcicjebcnbbehlinggnfebdcneanij) which I try to keep up to date with the latest stable release.  Please leave a nice review there if you enjoy the extension.
+
+Alternatively, if you want to download the extension from the [GitHub repo](https://github.com/BenKennish/TabGroupsPlus/),
 download it from the [Releases page](https://github.com/BenKennish/TabGroupsPlus/releases), extract the source code
 zip/tar.gz into a folder somewhere on your device and then, using your browser's "Extensions" section, enable Developer Mode,
 and use Load Unpacked extension pointing it to the folder.
