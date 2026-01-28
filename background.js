@@ -54,21 +54,6 @@ let globalWindowDataMap = new Map();
 const tabsAwaitingFirstUrl = new Set();
 
 
-// temporary store : map URL patterns to tab group names (should be stored in the local storage)
-const tabAutoGroupRules = [
-    {
-        urlSearchType: AUTO_GROUP_PATTERN_TYPE.HOSTNAME_CONTAINS,
-        urlSearchPattern: '.guildwars2.com',
-        tabGroupTitle: 'Guild Wars 2'
-    },
-    {
-        urlSearchType: AUTO_GROUP_PATTERN_TYPE.REGEXP,
-        urlSearchPattern: '^https?://([^/]+)/\\?test=autogroup',
-        tabGroupTitle: 'Testing',
-        regexpCompiled: null
-    }
-];
-
 
 // example of data structure within the windowData map defined above
 // this is used as a template/'constructor' for new window data objects
@@ -865,12 +850,13 @@ async function isFallbackTab(newTab)
 // return the title(s) of groups to autogroup a tab into based on the supplied url
 // (in descending priority order??)
 // empty array if url matches none of the patterns
+// TODO: should we just return the first matching group instead of an array?
 //
 function getAutoGroup(url)
 {
     const groups = [];
 
-    for (const rule of tabAutoGroupRules)
+    for (const rule of userOptions.tabAutoGroupRules)
     {
         switch (rule.urlSearchType)
         {

@@ -11,6 +11,12 @@ export const ALIGN = Object.freeze({
     DISABLED: 42
 });
 
+// constant object to fake an 'enum' for the types of auto-grouping patterns
+export const AUTO_GROUP_PATTERN_TYPE = Object.freeze({
+    HOSTNAME_CONTAINS: 0,
+    REGEXP: 1
+});
+
 export const DEFAULT_OPTIONS = Object.freeze({
 
     // do we perform a compact operation when the active tab is not in a group?
@@ -33,17 +39,25 @@ export const DEFAULT_OPTIONS = Object.freeze({
 
     // time to wait after activating a tab that doesn't have our content script injected
     // (e.g. a system tab) before compacting the other tab groups in the window
-    delayCompactOnActivateUninjectedTabMs: 3000
+    delayCompactOnActivateUninjectedTabMs: 3000,
+
+    // temporary example rules : map URL patterns to tab group names
+    tabAutoGroupRules: [
+        {
+            urlSearchType: AUTO_GROUP_PATTERN_TYPE.HOSTNAME_CONTAINS,
+            urlSearchPattern: '.guildwars2.com',
+            tabGroupTitle: 'Guild Wars 2 🐲'
+        },
+        {
+            urlSearchType: AUTO_GROUP_PATTERN_TYPE.REGEXP,
+            urlSearchPattern: '^https?://([^/]+)/\\?test=autogroup',
+            tabGroupTitle: 'Testing',
+            regexpCompiled: null
+        }
+    ]
 
 });
 
 // we use this prefix rather than defining a new wrapper function around console.log etc
 // because it makes tracking errors down easier w.r.t line numbers
 export const CONSOLE_PREFIX = "[TGP]";
-
-
-// constant object to fake an 'enum' for the types of auto-grouping patterns
-export const AUTO_GROUP_PATTERN_TYPE = Object.freeze({
-    HOSTNAME_CONTAINS: 0,
-    REGEXP: 1
-});
