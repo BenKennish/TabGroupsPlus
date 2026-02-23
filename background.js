@@ -27,7 +27,7 @@ const ON_STARTUP_WAIT_TIMEOUT_MS = 500;
 
 // time to wait (ms) before listening for events if the browser is starting up
 // (we allow time for it to create windows, tabs, etc when restoring previous session)
-const LISTEN_DELAY_ON_BROWSER_STARTUP_MS = 5000;
+const LISTEN_DELAY_ON_BROWSER_STARTUP_MS = 10000;
 
 // time to wait after a new tab is created before checking its group
 // (the reason for this is that the browser may move the tab into a group
@@ -863,6 +863,14 @@ function getAutoGroup(url)
             case AUTO_GROUP_PATTERN_TYPE.HOSTNAME_CONTAINS:
 
                 console.debug(`${CONSOLE_PREFIX} Testing ${url} against hostname pattern:`, rule.urlSearchPattern);
+
+                // NOTE: should this be a glob pattern and match the entire hostname?
+                // otherwise .guildwars2.com  would match  guildwars2.com.dodgysite.net
+                // but would * match "." or not?
+                // maybe it could just match the tail of the domain?
+                // what if we want it to match guildwars2.com and www.guildwars2.com?  if we used "guildwars2.com", this would also match "notreallyguildwars2.com"
+
+                // maybe userOptions.tabAutoGroupRules should match a tab group to a list of pattern rules? <=================== TODO
 
                 const hostname = (new URL(url)).hostname;
                 if (hostname.includes(rule.urlSearchPattern))
