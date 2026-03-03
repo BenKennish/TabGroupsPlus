@@ -13,7 +13,7 @@ export const ALIGN = Object.freeze({
 
 // constant object to fake an 'enum' for the types of auto-grouping patterns
 export const AUTO_GROUP_PATTERN_TYPE = Object.freeze({
-    HOSTNAME_CONTAINS: 0,
+    DOMAINNAME: 0,
     REGEXP: 1
 });
 
@@ -42,19 +42,67 @@ export const DEFAULT_OPTIONS = Object.freeze({
     delayCompactOnActivateUninjectedTabMs: 3000,
 
     // temporary example rules : map URL patterns to tab group names
+    /*
     tabAutoGroupRules: [
         {
-            urlSearchType: AUTO_GROUP_PATTERN_TYPE.HOSTNAME_CONTAINS,
-            urlSearchPattern: '.guildwars2.com',
+            urlSearchType: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME,
+            urlSearchPatterns: ['guildwars2.com'],
             tabGroupTitle: 'Guild Wars 2 🐲'
         },
         {
             urlSearchType: AUTO_GROUP_PATTERN_TYPE.REGEXP,
-            urlSearchPattern: '^https?://([^/]+)/\\?test=autogroup',
+            urlSearchPatterns: ['^https?://([^/]+)/\\?test=autogroup'],
             tabGroupTitle: 'Testing',
             regexpCompiled: null
+        },
+        {
+            urlSearchType: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME,
+            urlSearchPatterns: ['youtube.com', 'twitch.tv', 'netflix.com' ],
+            tabGroupTitle: 'Streaming 📺',
         }
-    ]
+    ],
+    */
+
+    autoGroupingEnabled: true,
+    autoGroupingCanCreateGroups: true,
+    autoGroupingCanOpenGroups: true,
+
+    magicAutoGroupingEnabled: false, //unimplemented
+
+    autoGroupRules: {
+        'Streaming 📺':
+            [
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'youtube.com' },
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'twitch.tv' },
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'netflix.com' }
+            ],
+        'Guild Wars 2 🐲':
+            [
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'guildwars2.com' }
+            ],
+        'Testing':
+            [
+                // any URL where the first GET param is "test=autogroup" gets put in the tab group called "Testing"
+                { type: AUTO_GROUP_PATTERN_TYPE.REGEXP, pattern: '^https?://([^/]+)/\\?test=autogroup', regexpCompiled: null }
+            ],
+        'Shopping 🛒':
+            [
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'amazon.co.uk' },
+            ],
+        'SHARED':
+            [
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'mail.google.com' },
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'calendar.google.com' }
+            ],
+        'AI 🧠':
+            [
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'gemini.google.com' },
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'perplexity.ai' },
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'chatgpt.com' }
+            ]
+    }
+
+    // TODO: auto grouping should take precedence over magic autogrouping
 
 });
 

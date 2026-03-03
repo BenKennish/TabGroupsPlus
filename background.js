@@ -847,79 +847,157 @@ async function isFallbackTab(newTab)
 }
 
 
-// return the title(s) of groups to autogroup a tab into based on the supplied url
-// (in descending priority order??)
-// empty array if url matches none of the patterns
-// TODO: should we just return the first matching group instead of an array?
+// return the title of group to autogroup a tab into based on the supplied url
+// null if url matches no autogrouping rules
+// FIXME: perhaps we should only return a group name if it is a valid group and the group is open?
 //
 function getAutoGroup(url)
 {
-    const groups = [];
+    const hostname = (new URL(url)).hostname;
 
-    for (const rule of userOptions.tabAutoGroupRules)
+    console.log('autoGroupRules as Object.entries():', Object.entries(userOptions.autoGroupRules));
+
+    // this is code block where we tried to use array methods like .findIndex() and .some() but failed to get it working
+
+    // Object.entries() returns an array of array [key, value] pairs from the object properties
+
+    // so it's a yucky messy structure like this
+    /*
+    [
+       ['Guild Wars 2', arrayOfRules ],
+       ['Streaming', arrayOfRules ],
+       ['Testing', arrayOfRules ],
+    ]
+
+    // autoGroupRules is an object mapping group names (autoGroupName) to arrays of rules (autoGroupRules)...
+    // .findIndex() is flattening this structure so it breaks
+    const groupName = Object.entries(userOptions.autoGroupRules).findIndex((autoGroupRules, autoGroupName) =>
     {
-        switch (rule.urlSearchType)
+        console.log(`Examining auto group rules for group ${autoGroupName}`);
+
+        // we want to return true in the .some() if one of the autoGroupRules matches
+        return autoGroupRules.some((autoGroupRule) =>
         {
-            case AUTO_GROUP_PATTERN_TYPE.HOSTNAME_CONTAINS:
+            console.log(`Found a rule of type ${autoGroupRule.type} with pattern:`, autoGroupRule.pattern);
 
-                console.debug(`${CONSOLE_PREFIX} Testing ${url} against hostname pattern:`, rule.urlSearchPattern);
+            console.log('autoGroupRule: ', autoGroupRule);
 
-                // NOTE: should this be a glob pattern and match the entire hostname?
-                // otherwise .guildwars2.com  would match  guildwars2.com.dodgysite.net
-                // but would * match "." or not?
-                // maybe it could just match the tail of the domain?
-                // what if we want it to match guildwars2.com and www.guildwars2.com?  if we used "guildwars2.com", this would also match "notreallyguildwars2.com"
-
-                // maybe userOptions.tabAutoGroupRules should match a tab group to a list of pattern rules? <=================== TODO
-
-                const hostname = (new URL(url)).hostname;
-                if (hostname.includes(rule.urlSearchPattern))
-                {
-                    console.log(`${CONSOLE_PREFIX} URL ${url} MATCHES hostname pattern:`, rule.urlSearchPattern);
-                    groups.push(rule.tabGroupTitle);
-                }
-
-                break;
-            case AUTO_GROUP_PATTERN_TYPE.REGEXP:
-
-                console.debug(`${CONSOLE_PREFIX} Testing ${url} against regexp pattern:`, rule.urlSearchPattern);
-
-                if (rule.regexpCompiled === null)
-                {
-                    try
+            switch (autoGroupRule.type)
+            {
+                case AUTO_GROUP_PATTERN_TYPE.DOMAINNAME:
+                    if (hostname === autoGroupRule.pattern || hostname.endsWith('.' + autoGroupRule.pattern))
                     {
-                        console.log(`${CONSOLE_PREFIX} Compiling regexp pattern:`, rule.urlSearchPattern);
-                        rule.regexpCompiled = new RegExp(rule.urlSearchPattern);
+                        console.log(`${CONSOLE_PREFIX} URL ${url} MATCHES domainname pattern:`, autoGroupRule.pattern);
+                        return true;
                     }
-                    catch (err)
-                    {
-                        console.error(`${CONSOLE_PREFIX} Invalid regexp pattern in auto-group rule:`, rule.urlSearchPattern, err);
-                        rule.regexpCompiled = false;
-                    }
-                }
 
-                if (rule.regexpCompiled)
-                {
-                    if (rule.regexpCompiled.test(url))
+                    break;
+                case AUTO_GROUP_PATTERN_TYPE.REGEXP:
+                    if (autoGroupRule.regexpCompiled === null)
                     {
-                        console.log(`${CONSOLE_PREFIX} URL ${url} MATCHES regexp pattern:`, rule.urlSearchPattern);
-                        groups.push(rule.tabGroupTitle);
+                        try
+                        {
+                            console.log(`${CONSOLE_PREFIX} Compiling regexp pattern:`, autoGroupRule.pattern);
+                            autoGroupRule.regexpCompiled = new RegExp(autoGroupRule.pattern);
+                        }
+                        catch (err)
+                        {
+                            console.error(`${CONSOLE_PREFIX} Invalid regexp pattern in auto-group rule:`, autoGroupRule.pattern, err);
+                            autoGroupRule.regexpCompiled = false;
+                        }
+                    }
+
+                    if (autoGroupRule.regexpCompiled)
+                    {
+                        if (autoGroupRule.regexpCompiled.test(url))
+                        {
+                            console.log(`${CONSOLE_PREFIX} URL ${url} MATCHES regexp pattern:`, autoGroupRule.pattern);
+                            return true;
+                        }
                     }
                     else
                     {
-                        console.debug(`${CONSOLE_PREFIX} URL ${url} does NOT match regexp pattern:`, rule.urlSearchPattern);
+                        console.debug(`${CONSOLE_PREFIX} URL ${url} does NOT match regexp pattern:`, autoGroupRule.pattern);
                     }
-                }
 
-                break;
-            default:
-                console.error(`${CONSOLE_PREFIX} Unknown urlSearchType in auto-group rule:`, rule.urlSearchType);
+                    break;
+                default:
+                    console.error(`${CONSOLE_PREFIX} Unknown search type in auto-group rule:`, autoGroupRule.type);
+            }
+        });
+
+    });
+
+    return groupName === -1 ? null : groupName;
+    */
+
+
+    for (const [autoGroupName, autoGroupRules] of Object.entries(userOptions.autoGroupRules))
+    {
+        console.log(`Examining auto group rules for group ${autoGroupName}`);
+
+        const isMatch = autoGroupRules.some((autoGroupRule) =>
+        {
+            console.log(`Found a rule of type ${autoGroupRule.type} with pattern:`, autoGroupRule.pattern);
+            return doesAutoGroupRuleMatch(autoGroupRule, url, hostname);
+        });
+
+        if (isMatch)
+        {
+            return autoGroupName;
         }
-    }
-    return groups;
+    };
+
+    return null;
 }
 
 
+function doesAutoGroupRuleMatch(autoGroupRule, url, hostname)
+{
+    switch (autoGroupRule.type)
+    {
+        case AUTO_GROUP_PATTERN_TYPE.DOMAINNAME:
+            if (hostname === autoGroupRule.pattern || hostname.endsWith('.' + autoGroupRule.pattern))
+            {
+                console.log(`${CONSOLE_PREFIX} URL ${url} MATCHES domainname pattern:`, autoGroupRule.pattern);
+                return true;
+            }
+
+            break;
+        case AUTO_GROUP_PATTERN_TYPE.REGEXP:
+            if (autoGroupRule.regexpCompiled === null)
+            {
+                try
+                {
+                    console.log(`${CONSOLE_PREFIX} Compiling regexp pattern:`, autoGroupRule.pattern);
+                    autoGroupRule.regexpCompiled = new RegExp(autoGroupRule.pattern);
+                }
+                catch (err)
+                {
+                    console.error(`${CONSOLE_PREFIX} Invalid regexp pattern in auto-group rule:`, autoGroupRule.pattern, err);
+                    autoGroupRule.regexpCompiled = false;
+                }
+            }
+
+            if (autoGroupRule.regexpCompiled)
+            {
+                if (autoGroupRule.regexpCompiled.test(url))
+                {
+                    console.log(`${CONSOLE_PREFIX} URL ${url} MATCHES regexp pattern:`, autoGroupRule.pattern);
+                    return true;
+                }
+            }
+            else
+            {
+                console.debug(`${CONSOLE_PREFIX} URL ${url} does NOT match regexp pattern:`, autoGroupRule.pattern);
+            }
+
+            break;
+        default:
+            console.error(`${CONSOLE_PREFIX} Unknown type in auto-group rule:`, autoGroupRule.type);
+    }
+    return false;
+}
 
 
 // define our listeners
@@ -928,8 +1006,6 @@ function getAutoGroup(url)
 //
 function onRuntimeMessage(message, sender, sendResponse)
 {
-
-    //return;
 
     switch (message.action)
     {
@@ -1116,63 +1192,62 @@ function onTabUpdated(tabId, changeInfo, tab)
         console.warn(`${CONSOLE_PREFIX} tabsAwaitingFirstUrl: `, tabsAwaitingFirstUrl);
 
         // check if this tab should be auto grouped (depending on URL)
-        const autoGroupNames = getAutoGroup(changeInfo.url);
+        const autoGroupName = getAutoGroup(changeInfo.url);
 
-        if (autoGroupNames?.length)  // if autoGroupNames is a non-empty array
+        if (autoGroupName)  // if autoGroupName is a non-empty string
         {
-            for (const groupName of autoGroupNames)
-            {
-                chrome.tabGroups.query({ title: groupName })
-                    .then((groups) =>
+            chrome.tabGroups.query({ title: autoGroupName })
+                .then((groups) =>
+                {
+                    if (groups.length === 0)
                     {
-                        if (groups.length === 0)
-                        {
-                            console.warn(`${CONSOLE_PREFIX} Couldn't find tab group with title "${groupName}" when attempting to auto-group`);
-                            return;
-                        }
+                        console.warn(`${CONSOLE_PREFIX} Couldn't find tab group with title "${autoGroupName}" when attempting to auto-group`);
+                        // TODO: check if the group exists - if it does, open it?  it not, create it?
+                        return;
+                    }
 
-                        if (groups.length > 1)
-                        {
-                            console.warn(`${CONSOLE_PREFIX} Found multiple (${groups.length}) tab groups with title "${groupName}" when attempting to auto-group`);
-                        }
-
-                        // just take the first matching tab group
-                        let group = groups[0];
-
-                        if (tab.groupId !== group.id)
-                        {
-                            chrome.tabs.group({ groupId: group.id, tabIds: tabId })
-                                .then(() =>
-                                {
-                                    console.log(`${CONSOLE_PREFIX} Autogrouped tab into group: `, tab, group);
-
-                                    //chrome.tabs.update(tabId, { active: true });
-                                    chrome.windows.update(group.windowId, { focused: true })
-                                        .then(() =>
-                                        {
-                                            // activate the tab
-                                            chrome.tabs.update(tabId, { active: true });
-                                        })
-                                        .catch((err) =>
-                                        {
-                                            console.warn(CONSOLE_PREFIX + "Error focusing the window containing the autogroup", err);
-                                        });
-
-                                })
-                                .catch((err) =>
-                                {
-                                    console.error(CONSOLE_PREFIX + " Error auto-grouping new tab", err);
-                                });
-                        }
-
-
-                    })
-                    .catch((err) =>
+                    if (groups.length > 1)
                     {
-                        console.error(`${CONSOLE_PREFIX} Error retrieving tab group with title '${rule.tabGroupTitle}':`, err);
-                    });
+                        console.warn(`${CONSOLE_PREFIX} Found multiple (${groups.length}) tab groups with title "${autoGroupName}" when attempting to auto-group`);
+                    }
 
-            }
+                    // just take the first matching tab group
+                    let group = groups[0];
+
+                    if (tab.groupId !== group.id)
+                    {
+                        chrome.tabs.group({ groupId: group.id, tabIds: tabId })
+                            .then(() =>
+                            {
+                                console.log(`${CONSOLE_PREFIX} Autogrouped tab into group: `, tab, group);
+
+                                //chrome.tabs.update(tabId, { active: true });
+                                chrome.windows.update(group.windowId, { focused: true })
+                                    .then(() =>
+                                    {
+                                        // activate the tab
+                                        chrome.tabs.update(tabId, { active: true });
+                                    })
+                                    .catch((err) =>
+                                    {
+                                        console.warn(CONSOLE_PREFIX + "Error focusing the window containing the autogroup", err);
+                                    });
+
+                            })
+                            .catch((err) =>
+                            {
+                                console.error(CONSOLE_PREFIX + " Error auto-grouping new tab", err);
+                            });
+                    }
+
+
+                })
+                .catch((err) =>
+                {
+                    console.error(`${CONSOLE_PREFIX} Error retrieving tab group with title '${rule.tabGroupTitle}':`, err);
+                });
+
+
             // FIXME: we might match multiple autogroup rules and we will be trying to group the tab multiple times async
             //  should we just stop at the first matched rule?
         }
