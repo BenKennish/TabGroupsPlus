@@ -1,6 +1,6 @@
 # TabGroupsPlus
 
-Add Tab Group related features to Chrome and Chromium-based web browsers (e.g. Brave) with this extension
+Adds Tab Group related features to Chrome and Chromium-based web browsers (e.g. Brave)
 
 1. Auto-collapses any expanded tab groups in the window that don't contain the window's active tab when...
     - the mouse cursor enters the content area of the active tab †

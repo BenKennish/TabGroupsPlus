@@ -31,17 +31,18 @@ document.addEventListener('DOMContentLoaded', function ()
             autoGroupNewTabs: document.getElementById('autoGroupNewTabs').checked
         }
 
-        chrome.storage.sync.set(optionsToSave, () =>
-        {
-            if (chrome.runtime.lastError)
+        chrome.storage.sync.set(optionsToSave)
+            .then(() =>
             {
-                console.error(`${CONSOLE_PREFIX} Error setting options in storage:`, chrome.runtime.lastError.message);
-            }
+                // background.js has a listener for the storage being updated so we just close the options window
+                // and let it handle it
+                window.close();
 
-            // background.js has a listener for the storage being updated so we just close the options window
-            // and let it handle it
-            window.close();
-        });
+            }).catch((err) =>
+            {
+                console.error(`${CONSOLE_PREFIX} Error setting options in storage:`, err);
+            });
+
     });
 
     // Close window when cancel button clicked

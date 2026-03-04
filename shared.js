@@ -64,11 +64,20 @@ export const DEFAULT_OPTIONS = Object.freeze({
     */
 
     autoGroupingEnabled: true,
-    autoGroupingCanCreateGroups: true,
-    autoGroupingCanOpenGroups: true,
+    autoGroupingChecksExistingTabs: true,  // this may be better as a per-rule setting but for now it's here
 
-    magicAutoGroupingEnabled: false, //unimplemented
+    // forget about these for now:
+    //autoGroupingCanCreateGroups: true,  // because extensions cannot access Chrome's closed groups (that can sit on the bookmarks bar, for example), we might end up creating duplicate groups with the same name
+    //autoGroupingCanOpenGroups: true,    // currently not possible to open closed tab groups
 
+    // unimplemented - just here as a reminder
+    // the idea is that whenever the URL of a tab is updated, we check if the domain matches the domain of any of the other tabs and, if it does, we group them together if there are more than X tabs for that domain
+    // auto grouping should take precedence over magic autogrouping
+    autoGroupingMagicByDomainEnabled: false,
+    autoGroupingMagicIncludeGroupedTabs: false,  // whether already grouped tabs are considered for magic auto-grouping
+    autoGroupingMagicMinTabsByDomain: 3,  // minimum number of tabs with the same domain before we start auto-grouping them together (must be >= 2)
+
+    // maps tab group names to lists of rules that define which tabs get auto-grouped into that group
     autoGroupRules: {
         'Streaming 📺':
             [
@@ -102,7 +111,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
             ]
     }
 
-    // TODO: auto grouping should take precedence over magic autogrouping
+
 
 });
 

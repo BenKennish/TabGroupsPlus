@@ -92,6 +92,38 @@
 
         <div class="form-spacer"></div>
 
+        <!-- TODO: put the autoGrouping stuff here -->
+        <!-- if this is disabled, grey out and disable the options below -->
+        <div class="form-row">
+            <label for="autoGroupingEnabled" class="form-label">Enable auto grouping based on website URL?</label>
+            <input type="checkbox" id="autoGroupingEnabled" name="autoGroupingEnabled" class="form-input">
+        </div>
+
+        <div class="form-row">
+            <label for="autoGroupingChecksExistingTabs" class="form-label">Check existing tabs for auto
+                grouping?</label>
+            <input type="checkbox" id="autoGroupingChecksExistingTabs" name="autoGroupingChecksExistingTabs"
+                class="form-input">
+        </div>
+
+        <!--
+        here we want a panel where the user can select groups that should be autogroups and add/edit/delete rules and patterns for it
+        something like this where
+        (  ) is a drop down
+        [  ] is a text box
+        {  } is a button (or link) ...
+
+            Group ( Streaming v )  { Delete }
+                Type ( Domain v )   Value: [ youtube.com       ] { Edit } { Delete }
+                Type ( Domain v )   Value: [ twitch.tv         ] { Edit } { Delete }
+                Type ( Regexp v )   Value: [ ^https?://([^/]+)/\\?test=autogroup ]  { Edit } { Delete }
+            Group ( AI v )  { Delete }
+                Type ( Domain v )   Value: [ chatgpt.com    ] { Edit } { Delete }
+                Type ( Domain v )   Value: [ gemini.google.com    ] { Edit } { Delete }
+            { Add AutoGroup }
+
+        -->
+
         <div class="form-row">
 
             <span>
