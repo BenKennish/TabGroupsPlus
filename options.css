@@ -1,0 +1,39 @@
+/* Container for the form */
+.options-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Row containing description and input */
+.form-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.form-spacer {
+    height: 20px;
+    /* Spacer between form elements */
+}
+
+/* Label styling */
+.form-label {
+    width: 300px;
+}
+
+/* Input styling */
+.form-input {
+    flex-grow: 1;
+}
+
+/* Cancel button alignment */
+.form-cancel-btn {
+    flex-grow: 1;
+    text-align: right;
+}
+
+/* Narrow numeric delay inputs */
+.form-input-narrow {
+    width: 50px;
+}
