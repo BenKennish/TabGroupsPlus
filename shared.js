@@ -41,27 +41,6 @@ export const DEFAULT_OPTIONS = Object.freeze({
     // (e.g. a system tab) before compacting the other tab groups in the window
     delayCompactOnActivateUninjectedTabMs: 3000,
 
-    // temporary example rules : map URL patterns to tab group names
-    /*
-    tabAutoGroupRules: [
-        {
-            urlSearchType: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME,
-            urlSearchPatterns: ['guildwars2.com'],
-            tabGroupTitle: 'Guild Wars 2 🐲'
-        },
-        {
-            urlSearchType: AUTO_GROUP_PATTERN_TYPE.REGEXP,
-            urlSearchPatterns: ['^https?://([^/]+)/\\?test=autogroup'],
-            tabGroupTitle: 'Testing',
-            regexpCompiled: null
-        },
-        {
-            urlSearchType: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME,
-            urlSearchPatterns: ['youtube.com', 'twitch.tv', 'netflix.com' ],
-            tabGroupTitle: 'Streaming 📺',
-        }
-    ],
-    */
 
     autoGroupingEnabled: true,
     autoGroupingChecksExistingTabs: true,  // this may be better as a per-rule setting but for now it's here

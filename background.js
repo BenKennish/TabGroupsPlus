@@ -6,11 +6,6 @@
 // TODO: FEATURE: option to auto close tab groups that haven't been used in a while (not just collapse the group, actually *close* them)
 // doesn't seem possible as chrome API doesn't (yet) allow for closing a tab group other than just closing all its tabs one-by-one
 
-// TODO: FEATURE: option to auto-group new tabs according to tab.url (we will need the 'tabs' permission).
-//       we'll need to store the name of the Tab Group as the ID can change between sessions
-
-// TODO: FEATURE: button that will store information about all groups, then tear them all down, and recreate them so that they are in the right order?  how does this affect other devices?
-
 // TODO: SECURITY: make content scripts optional
 // we can use chrome.scripting.registerContentScripts() if we have the scripting permission
 //  so perhaps we optionally request 'scripting' and put "<all_urls>"" in optional_host_permissions then
@@ -18,6 +13,7 @@
 // TODO: OPTIMIZATION: for any process, fetch the tab object and pass it around rather than just the tab ID (but only when necessary)
 //       will the tab object get stale?  i.e. if the tab is moved or closed?
 
+// TODO: FEATURE: button that will store information about all groups, then tear them all down, and recreate them so that they are in the right order?  how does this affect other devices?
 
 import { ALIGN, DEFAULT_OPTIONS, CONSOLE_PREFIX, AUTO_GROUP_PATTERN_TYPE } from './shared.js';
 
