@@ -82,6 +82,91 @@ const newWindowDataObj = {
 // ============================================================================
 // ============================================================================
 
+// results of testing on 06 Mar 2026:
+//
+// groups created using chrome.tabs.group() automatically become 'saved groups'
+// (i.e. they appear on bookmarks bar and get synced to other devices)
+// and adding/removing tabs to/from such a group will remove them on all devices (it saves)
+// removing all the tabs causes the group to be deleted and this is also saved so it's deleted on all devices
+// BUT
+// property changes for the new group (e.g. name / colour) using chrome.tabGroups.update() don't propogate to saved groups storage
+// also these changes aren't updated visually in the UI, but underneath the group has those properties when queried directly.
+
+// Test function to create a group via API and check if it saves
+async function testApiGroupSaving()
+{
+    console.warn('=============== Testing API-created group saving...');
+
+    // Create some tabs
+    const tab1 = await chrome.tabs.create({ url: 'https://example.com' });
+    const tab2 = await chrome.tabs.create({ url: 'https://google.com' });
+
+    // Group them
+    const groupId = await chrome.tabs.group({ tabIds: [tab1.id, tab2.id] });
+    console.warn('=============== Created group with ID:', groupId);
+
+    setTimeout(() =>
+    {
+        chrome.tabGroups.update(groupId, { title: "Testing 123", color: "yellow" });
+        console.warn('=============== Named and colored group ', groupId);
+
+        setTimeout(async () =>
+        {
+            console.warn('=============== Adding new tab to group :', groupId);
+            const tab3 = await chrome.tabs.create({ url: 'https://bennish.net' });
+            await chrome.tabs.group({ groupId: groupId, tabIds: [tab3.id] });
+        }, 1000);
+
+    }, 1000);
+}
+
+// Test function to simulate closing one tab or all tabs from a saved group
+async function testClosingTabFromSavedGroup(closeAll = false)
+{
+    console.warn('=============== Testing closing tabs from saved group "Testing 123"...');
+
+    const groups = await chrome.tabGroups.query({ title: "Testing 123" });
+
+    if (groups.length > 0)
+    {
+        const group = groups[0];
+        const tabs = await chrome.tabs.query({ groupId: group.id });
+
+        if (!closeAll)
+        {
+            // Close first tab
+            await chrome.tabs.remove(tabs[0].id);
+            console.warn('=============== Closed a tab from group. Check bookmarks bar to see if saved group updated.');
+        }
+        else
+        {
+            // Close all tabs in the group
+            const tabIds = tabs.map(tab => tab.id);
+            await chrome.tabs.remove(tabIds);
+        }
+
+    }
+    else
+    {
+        console.error('=============== No group with title "Testing 123" found. Please create and save this group first.');
+    }
+}
+
+
+// stuff in here gets run when the extension is first initialised and we might want to do some testing stuff
+function runInitTests()
+{
+    return;
+
+    testApiGroupSaving().then(() =>
+    {
+        setTimeout(() =>
+        {
+            testClosingTabFromSavedGroup(true);
+        }, 30000);
+    });
+}
+
 
 // retrieve data for a window, creating a new entry in the Map if necessary
 //
@@ -1015,7 +1100,7 @@ function onActivateUninjectableTab(tabId)
     {
         if (chrome.runtime.lastError)
         {
-            console.error(`${CONSOLE_PREFIX} Failed to get activated tab ${activeInfo.tabId}`, chrome.runtime.lastError);
+            console.error(`${CONSOLE_PREFIX} Failed to get activated tab ${tabId}`, chrome.runtime.lastError);
             return;
         }
 
@@ -1547,6 +1632,8 @@ function startUp()
     console.log(CONSOLE_PREFIX + " >>>>>>>>>>>>>> Starting up...");
     registerListeners();
     browserStartingUp = false;
+
+    runInitTests();
 
     chrome.storage.local.get(['windowData'])
         .then((result) =>

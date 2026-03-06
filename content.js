@@ -35,7 +35,7 @@ if (!window.isInjected)
 
     // used to handle pings from background.js,
     // to check whether the content script is hooked into the current tab
-    function onMessage(message, sender, sendResponse)
+    function onMsg(message, sender, sendResponse)
     {
         if (window.isInjected)
         {
@@ -49,7 +49,7 @@ if (!window.isInjected)
             }
         }
     }
-    chrome.runtime.onMessage.addListener(onMessage);
+    chrome.runtime.onMessage.addListener(onMsg);
 
 
     window.addEventListener('beforeunload', () =>
@@ -58,7 +58,7 @@ if (!window.isInjected)
         window.isInjected = false;
         document.documentElement.removeEventListener('mouseenter', onMouseEnter);
         document.documentElement.removeEventListener('mouseleave', onMouseLeave);
-        chrome.runtime.onMessage.removeListener(onMessage);
+        chrome.runtime.onMessage.removeListener(onMsg);
         console.log('[TGP] Listeners removed');
     });
 
