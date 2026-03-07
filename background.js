@@ -157,7 +157,7 @@ async function testClosingTabFromSavedGroup(closeAll = false)
 function runInitTests()
 {
     return;
-
+    /*
     testApiGroupSaving().then(() =>
     {
         setTimeout(() =>
@@ -165,6 +165,7 @@ function runInitTests()
             testClosingTabFromSavedGroup(true);
         }, 30000);
     });
+    */
 }
 
 
