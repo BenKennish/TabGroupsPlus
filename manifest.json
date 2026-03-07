@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "Tab Groups Plus",
     "short_name": "Tab Groups +",
-    "version": "1.5.0",
+    "version": "1.5.1",
     "description": "Auto-collapses inactive tab groups, aligns the active tab group, and adds new tabs to the currently active tab's group",
     "author": "ben@kennish.net",
     "homepage_url": "https://github.com/BenKennish/TabGroupsPlus",
@@ -10,9 +10,9 @@
         "128": "images/icon-128.png"
     },
     "permissions": [
-        "tabGroups",
-        "storage",
-        "tabs" // make optional
+        "tabGroups", // Warning displayed: "View and manage your tab groups."
+        "storage", // No warning displayed
+        "tabs" // Warning displayed: "Read your browsing history.".  Allows using properties: url, pendingUrl, title, and favIconUrl.
     ],
     "background": {
         "service_worker": "background.js",
@@ -29,6 +29,7 @@
             "run_at": "document_start"
         }
     ],
+    //"host_permissions" - would allow us to inject content scripts in dynamically (and see https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions#host-permissions)
     //"options_page": "options.html",
     "options_ui": {
         "page": "options.html",

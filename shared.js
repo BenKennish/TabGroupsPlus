@@ -1,6 +1,10 @@
 // Tab Groups Plus
 // shared.js
-//   a module of stuff that's shared between background.js, content.js, and/or options.js
+//   a module of stuff that's shared between background.js and options.js
+
+// we use this prefix rather than defining a new wrapper function around console.log etc
+// because it makes tracking errors down easier w.r.t line numbers
+export const CONSOLE_PREFIX = "[TGP]";
 
 // constant object to fake an 'enum'
 // the numbers for LEFT and RIGHT conveniently match the tab index locations
@@ -26,12 +30,13 @@ export const DEFAULT_OPTIONS = Object.freeze({
     // if false, the previously active group will not be collapsed (remain expanded)
     collapsePreviousActiveGroupOnActivateUngroupedTab: false,
 
-    // valid values ALIGN.LEFT, ALIGN.RIGHT, or ALIGN.DISABLED
+    // how do we align the active tab group at the end of a compact operation
+    // valid values are ALIGN.LEFT, ALIGN.RIGHT, or ALIGN.DISABLED
     alignActiveTabGroup: ALIGN.DISABLED,
 
-    // upon creating a new tab (which gets activated)
-    // do we auto group it into the same group as the previously active tab?
-    autoGroupNewTabs: true,
+    // upon creating a new tab in a window
+    // do we place it into the group of the previously active tab of that window
+    moveNewTabsToGroupOfLastActiveTabInWindow: true,
 
     // time to wait after mouse cursor entering an injected tab's content area
     // before compacting the other tab groups in the window
@@ -41,17 +46,24 @@ export const DEFAULT_OPTIONS = Object.freeze({
     // (e.g. a system tab) before compacting the other tab groups in the window
     delayCompactOnActivateUninjectedTabMs: 3000,
 
-
+    // is auto grouping enabled
     autoGroupingEnabled: true,
-    autoGroupingChecksExistingTabs: true,  // this may be better as a per-rule setting but for now it's here
 
-    // forget about these for now:
-    //autoGroupingCanCreateGroups: true,  // because extensions cannot access Chrome's closed groups (that can sit on the bookmarks bar, for example), we might end up creating duplicate groups with the same name
-    //autoGroupingCanOpenGroups: true,    // currently not possible to open closed tab groups
+    // does auto grouping allow for grouping existing tabs (as opposed to just newly created ones)
+    // this may be better as a per-rule setting
+    // (e.g. user wants to autogroup whenever a tab (new or old) goes to wiki.guildwars2.com
+    // but not autogroup existing tabs that navigate to youtube.com)
+    autoGroupingChecksExistingTabs: true,
 
-    // unimplemented - just here as a reminder
+    // UNIMPLEMENTED
+    // problematic as extensions cannot access Chrome's saved groups that are closed (that can sit on the bookmarks bar) so we might end up creating a new groups instead of reusing existing closed saved group
+    //autoGroupingCanCreateGroups: true,
+    // currently not possible to open closed tab groups (within saved groups)
+    //autoGroupingCanOpenGroups: true,
+
+    // UNIMPLEMENTED
     // the idea is that whenever the URL of a tab is updated, we check if the domain matches the domain of any of the other tabs and, if it does, we group them together if there are more than X tabs for that domain
-    // auto grouping should take precedence over magic autogrouping
+    // auto grouping (pattern based) should take precedence over magic autogrouping
     autoGroupingMagicByDomainEnabled: false,
     autoGroupingMagicIncludeGroupedTabs: false,  // whether already grouped tabs are considered for magic auto-grouping
     autoGroupingMagicMinTabsByDomain: 3,  // minimum number of tabs with the same domain before we start auto-grouping them together (must be >= 2)
@@ -91,9 +103,4 @@ export const DEFAULT_OPTIONS = Object.freeze({
     }
 
 
-
 });
-
-// we use this prefix rather than defining a new wrapper function around console.log etc
-// because it makes tracking errors down easier w.r.t line numbers
-export const CONSOLE_PREFIX = "[TGP]";

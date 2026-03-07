@@ -3,17 +3,11 @@
 // service worker (background.js)
 // ===========================================================================
 
-// TODO: FEATURE: option to auto close tab groups that haven't been used in a while (not just collapse the group, actually *close* them)
-// doesn't seem possible as chrome API doesn't (yet) allow for closing a tab group other than just closing all its tabs one-by-one
+// see GitHub issues for official TODOs and known bugs:
+// https://github.com/BenKennish/TabGroupsPlus/issues
 
-// TODO: SECURITY: make content scripts optional
-// we can use chrome.scripting.registerContentScripts() if we have the scripting permission
-//  so perhaps we optionally request 'scripting' and put "<all_urls>"" in optional_host_permissions then
-
-// TODO: OPTIMIZATION: for any process, fetch the tab object and pass it around rather than just the tab ID (but only when necessary)
-//       will the tab object get stale?  i.e. if the tab is moved or closed?
-
-// TODO: FEATURE: button that will store information about all groups, then tear them all down, and recreate them so that they are in the right order?  how does this affect other devices?
+// NOTE: we deliberately do not pass around Tab objects but use tabIds because tab objects are snapshots
+// (i.e. they are not updated when the tabs are updated elsewhere)
 
 import { ALIGN, DEFAULT_OPTIONS, CONSOLE_PREFIX, AUTO_GROUP_PATTERN_TYPE } from './shared.js';
 
@@ -26,30 +20,29 @@ const ON_STARTUP_WAIT_TIMEOUT_MS = 500;
 const LISTEN_DELAY_ON_BROWSER_STARTUP_MS = 10000;
 
 // time to wait after a new tab is created before checking its group
-// (the reason for this is that the browser may move the tab into a group
-// automatically very shortly after its creation)
+// (the reason for this is that the browser may have plans to move the tab
+// into a group automatically very shortly after its creation)
 const CHECK_GROUPING_DELAY_ON_CREATE_TAB_MS = 250;
 
 // enable/disable console.debug() messages
 const SHOW_DEBUG_CONSOLE_MSGS = true;
 
 // setting to true requires setting "host_permissions" in manifest.json and adding the "scripting" permission
-// and then uncommenting code below
+// and then uncommenting further code below
 const DYNAMIC_INJECTS = false;
 
-// used to store user options from the storage in this object
+// used to store user options (retrieved from Chrome's sync storage)
 let userOptions = {};
-
-// map window ID to object about that window (see newWindowDataObj below)
-// don't touch this directly - use getWindowData() to access it
-// and call saveWindowData() to save it back to local storage
-let globalWindowDataMap = new Map();
 
 // when a new tab is created, we store the ID in here
 // and we remove it when the tab starts loading its first URL
+// this is used to track
 const tabsAwaitingFirstUrl = new Set();
 
-
+// maps window ID to an object about that window (see newWindowDataObj below)
+// don't touch this directly - use getWindowData() to access it
+// and call saveWindowData() to save it back to local storage
+let globalWindowDataMap = new Map();
 
 // example of data structure within the windowData map defined above
 // this is used as a template/'constructor' for new window data objects
@@ -68,7 +61,7 @@ const newWindowDataObj = {
     // can add it to the group of this last active tab
     lastActiveTabId: null,
 
-    // set to the ID of a new tab so that onActivate and onCreate don't stomp on each other
+    // gets set to the ID of a newly created tab so that onActivate and onCreate don't stomp on each other
     newTabId: null,
 
     // setTimeout timer object for the compact operation gets stored here
@@ -82,91 +75,6 @@ const newWindowDataObj = {
 // ============================================================================
 // ============================================================================
 
-// results of testing on 06 Mar 2026:
-//
-// groups created using chrome.tabs.group() automatically become 'saved groups'
-// (i.e. they appear on bookmarks bar and get synced to other devices)
-// and adding/removing tabs to/from such a group will remove them on all devices (it saves)
-// removing all the tabs causes the group to be deleted and this is also saved so it's deleted on all devices
-// BUT
-// property changes for the new group (e.g. name / colour) using chrome.tabGroups.update() don't propogate to saved groups storage
-// also these changes aren't updated visually in the UI, but underneath the group has those properties when queried directly.
-
-// Test function to create a group via API and check if it saves
-async function testApiGroupSaving()
-{
-    console.warn('=============== Testing API-created group saving...');
-
-    // Create some tabs
-    const tab1 = await chrome.tabs.create({ url: 'https://example.com' });
-    const tab2 = await chrome.tabs.create({ url: 'https://google.com' });
-
-    // Group them
-    const groupId = await chrome.tabs.group({ tabIds: [tab1.id, tab2.id] });
-    console.warn('=============== Created group with ID:', groupId);
-
-    setTimeout(() =>
-    {
-        chrome.tabGroups.update(groupId, { title: "Testing 123", color: "yellow" });
-        console.warn('=============== Named and colored group ', groupId);
-
-        setTimeout(async () =>
-        {
-            console.warn('=============== Adding new tab to group :', groupId);
-            const tab3 = await chrome.tabs.create({ url: 'https://bennish.net' });
-            await chrome.tabs.group({ groupId: groupId, tabIds: [tab3.id] });
-        }, 1000);
-
-    }, 1000);
-}
-
-// Test function to simulate closing one tab or all tabs from a saved group
-async function testClosingTabFromSavedGroup(closeAll = false)
-{
-    console.warn('=============== Testing closing tabs from saved group "Testing 123"...');
-
-    const groups = await chrome.tabGroups.query({ title: "Testing 123" });
-
-    if (groups.length > 0)
-    {
-        const group = groups[0];
-        const tabs = await chrome.tabs.query({ groupId: group.id });
-
-        if (!closeAll)
-        {
-            // Close first tab
-            await chrome.tabs.remove(tabs[0].id);
-            console.warn('=============== Closed a tab from group. Check bookmarks bar to see if saved group updated.');
-        }
-        else
-        {
-            // Close all tabs in the group
-            const tabIds = tabs.map(tab => tab.id);
-            await chrome.tabs.remove(tabIds);
-        }
-
-    }
-    else
-    {
-        console.error('=============== No group with title "Testing 123" found. Please create and save this group first.');
-    }
-}
-
-
-// stuff in here gets run when the extension is first initialised and we might want to do some testing stuff
-function runInitTests()
-{
-    return;
-    /*
-    testApiGroupSaving().then(() =>
-    {
-        setTimeout(() =>
-        {
-            testClosingTabFromSavedGroup(true);
-        }, 30000);
-    });
-    */
-}
 
 
 // retrieve data for a window, creating a new entry in the Map if necessary
@@ -1161,6 +1069,9 @@ function onTabActivated(activeInfo)
             return;
         }
 
+        // remove/comment this line if uncommenting the code for dynamic injected below
+        console.error(`${CONSOLE_PREFIX} Activated tab ${activeInfo.tabId} has no content script injected and dynamic injects are enabled but the code is commented out.`);
+
         // try to dynamically inject content script
         // you can comment out if DYNAMIC_INJECTS is false
         // to stop Google complaining that the manifest.json lacks 'scripting' permission
@@ -1367,7 +1278,7 @@ function onTabCreated(newTab)
     console.debug(`${CONSOLE_PREFIX} New tab created`, newTab);
     tabsAwaitingFirstUrl.add(newTab.id);
 
-    if (!userOptions.autoGroupNewTabs)
+    if (!userOptions.moveNewTabsToGroupOfLastActiveTabInWindow)
     {
         return;
     }
@@ -1396,6 +1307,7 @@ function onTabCreated(newTab)
         return;
     }
 
+    // pause to give the browser time to potentially move the tab into a new group if applicable
     setTimeout(() =>
     {
         // refetch the tab to check for updates
@@ -1426,7 +1338,7 @@ function onTabCreated(newTab)
                         {
                             if (lastActiveTabId === newTab.id)
                             {
-                                console.warn(CONSOLE_PREFIX + " New tab is the also the last active tab in the window.");
+                                console.warn(CONSOLE_PREFIX + " New tab is also the last active tab in the window. Weird.");
                                 return;
                             }
 
@@ -1471,7 +1383,7 @@ function onTabCreated(newTab)
                 return;
             });
 
-    }, CHECK_GROUPING_DELAY_ON_CREATE_TAB_MS); // we pause to give the browser time to potentially move the tab into a new group if applicable
+    }, CHECK_GROUPING_DELAY_ON_CREATE_TAB_MS);
 
 }
 
@@ -1634,7 +1546,16 @@ function startUp()
     registerListeners();
     browserStartingUp = false;
 
-    runInitTests();
+    // some test code to run on startup
+    /*
+    testApiGroupSaving().then(() =>
+    {
+        setTimeout(() =>
+        {
+            testClosingTabFromSavedGroup(true);
+        }, 30000);
+    });
+    */
 
     chrome.storage.local.get(['windowData'])
         .then((result) =>
@@ -1686,6 +1607,79 @@ function startUp()
         })
 
 }
+
+
+// results of testing with these functions on 06 Mar 2026:
+//
+// groups created using chrome.tabs.group() automatically become 'saved groups'
+// (i.e. they appear on bookmarks bar and get synced to other devices)
+// and adding/removing tabs to/from such a group will remove them on all devices (it saves)
+// removing all the tabs causes the group to be deleted and this is also saved so it's deleted on all devices
+// BUT
+// property changes for the new group (e.g. name / colour) using chrome.tabGroups.update() don't propogate to saved groups storage
+// and are not updated visually in the UI, even though underneath the group has those properties
+// (can update GUI by opening and closing group, for example)
+
+// Test function to create a group via API and check if it saves
+async function testApiGroupSaving()
+{
+    console.warn('=============== Testing API-created group saving...');
+
+    // Create some tabs
+    const tab1 = await chrome.tabs.create({ url: 'https://example.com' });
+    const tab2 = await chrome.tabs.create({ url: 'https://google.com' });
+
+    // Group them
+    const groupId = await chrome.tabs.group({ tabIds: [tab1.id, tab2.id] });
+    console.warn('=============== Created group with ID:', groupId);
+
+    setTimeout(() =>
+    {
+        chrome.tabGroups.update(groupId, { title: "Testing 123", color: "yellow" });
+        console.warn('=============== Named and colored group ', groupId);
+
+        setTimeout(async () =>
+        {
+            console.warn('=============== Adding new tab to group :', groupId);
+            const tab3 = await chrome.tabs.create({ url: 'https://bennish.net' });
+            await chrome.tabs.group({ groupId: groupId, tabIds: [tab3.id] });
+        }, 1000);
+
+    }, 1000);
+}
+
+// Test function to simulate closing one tab or all tabs from a saved group
+async function testClosingTabFromSavedGroup(closeAll = false)
+{
+    console.warn('=============== Testing closing tabs from saved group "Testing 123"...');
+
+    const groups = await chrome.tabGroups.query({ title: "Testing 123" });
+
+    if (groups.length > 0)
+    {
+        const group = groups[0];
+        const tabs = await chrome.tabs.query({ groupId: group.id });
+
+        if (!closeAll)
+        {
+            // Close first tab
+            await chrome.tabs.remove(tabs[0].id);
+            console.warn('=============== Closed a tab from group. Check bookmarks bar to see if saved group updated.');
+        }
+        else
+        {
+            // Close all tabs in the group
+            const tabIds = tabs.map(tab => tab.id);
+            await chrome.tabs.remove(tabIds);
+        }
+
+    }
+    else
+    {
+        console.error('=============== No group with title "Testing 123" found. Please create and save this group first.');
+    }
+}
+
 
 
 // ====================================================

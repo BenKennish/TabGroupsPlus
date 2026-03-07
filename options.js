@@ -7,12 +7,14 @@ document.addEventListener('DOMContentLoaded', function ()
     {
         console.log(`${CONSOLE_PREFIX} Updating HTML controls to match options object...`, options);
 
+        document.getElementById('alignActiveTabGroup').value = options.alignActiveTabGroup;
         document.getElementById('compactOnActivateUngroupedTab').checked = options.compactOnActivateUngroupedTab;
         document.getElementById('collapsePreviousActiveGroupOnActivateUngroupedTab').checked = options.collapsePreviousActiveGroupOnActivateUngroupedTab;
-        document.getElementById('alignActiveTabGroup').value = options.alignActiveTabGroup;
+
+        document.getElementById('moveNewTabsToGroupOfLastActiveTabInWindow').checked = options.autoGroupNewTabs;
         document.getElementById('delayCompactOnEnterContentAreaMs').value = options.delayCompactOnEnterContentAreaMs;
         document.getElementById('delayCompactOnActivateUninjectedTabMs').value = options.delayCompactOnActivateUninjectedTabMs;
-        document.getElementById('autoGroupNewTabs').checked = options.autoGroupNewTabs;
+
     });
 
     // Save options when the form is submitted
@@ -23,12 +25,14 @@ document.addEventListener('DOMContentLoaded', function ()
         event.preventDefault();
 
         const optionsToSave = {
+            alignActiveTabGroup: parseInt(document.getElementById('alignActiveTabGroup').value, 10),
             compactOnActivateUngroupedTab: document.getElementById('compactOnActivateUngroupedTab').checked,
             collapsePreviousActiveGroupOnActivateUngroupedTab: document.getElementById('collapsePreviousActiveGroupOnActivateUngroupedTab').checked,
-            alignActiveTabGroup: parseInt(document.getElementById('alignActiveTabGroup').value, 10),
+
+            moveNewTabsToGroupOfLastActiveTabInWindow: document.getElementById('moveNewTabsToGroupOfLastActiveTabInWindow').checked,
             delayCompactOnEnterContentAreaMs: parseInt(document.getElementById('delayCompactOnEnterContentAreaMs').value, 10),  // base 10
-            delayCompactOnActivateUninjectedTabMs: parseInt(document.getElementById('delayCompactOnActivateUninjectedTabMs').value, 10), // base 10
-            autoGroupNewTabs: document.getElementById('autoGroupNewTabs').checked
+            delayCompactOnActivateUninjectedTabMs: parseInt(document.getElementById('delayCompactOnActivateUninjectedTabMs').value, 10) // base 10
+
         }
 
         chrome.storage.sync.set(optionsToSave)
