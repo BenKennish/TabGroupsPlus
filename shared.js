@@ -99,7 +99,15 @@ export const DEFAULT_OPTIONS = Object.freeze({
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'gemini.google.com' },
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'perplexity.ai' },
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'chatgpt.com' }
+            ],
+        'Overwatch':
+            [
+                // an example of why you might want domainname pattern to match anywhere within the domain rather than just at the end
+                //  - matching 'overwatch' would be nicer
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'overwatch.blizzard.com' },
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'overwatch.fandom.com' },
             ]
+
     }
 
 

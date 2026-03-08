@@ -1,22 +1,7 @@
 import { DEFAULT_OPTIONS, CONSOLE_PREFIX } from './shared.js';
 
-document.addEventListener('DOMContentLoaded', function ()
+document.addEventListener('DOMContentLoaded', () =>
 {
-    // Load saved options
-    chrome.storage.sync.get(DEFAULT_OPTIONS, (options) =>
-    {
-        console.log(`${CONSOLE_PREFIX} Updating HTML controls to match options object...`, options);
-
-        document.getElementById('alignActiveTabGroup').value = options.alignActiveTabGroup;
-        document.getElementById('compactOnActivateUngroupedTab').checked = options.compactOnActivateUngroupedTab;
-        document.getElementById('collapsePreviousActiveGroupOnActivateUngroupedTab').checked = options.collapsePreviousActiveGroupOnActivateUngroupedTab;
-
-        document.getElementById('moveNewTabsToGroupOfLastActiveTabInWindow').checked = options.autoGroupNewTabs;
-        document.getElementById('delayCompactOnEnterContentAreaMs').value = options.delayCompactOnEnterContentAreaMs;
-        document.getElementById('delayCompactOnActivateUninjectedTabMs').value = options.delayCompactOnActivateUninjectedTabMs;
-
-    });
-
     // Save options when the form is submitted
     document.getElementById('options-form').addEventListener('submit', (event) =>
     {
@@ -32,7 +17,6 @@ document.addEventListener('DOMContentLoaded', function ()
             moveNewTabsToGroupOfLastActiveTabInWindow: document.getElementById('moveNewTabsToGroupOfLastActiveTabInWindow').checked,
             delayCompactOnEnterContentAreaMs: parseInt(document.getElementById('delayCompactOnEnterContentAreaMs').value, 10),  // base 10
             delayCompactOnActivateUninjectedTabMs: parseInt(document.getElementById('delayCompactOnActivateUninjectedTabMs').value, 10) // base 10
-
         }
 
         chrome.storage.sync.set(optionsToSave)
@@ -50,7 +34,7 @@ document.addEventListener('DOMContentLoaded', function ()
     });
 
     // Close window when cancel button clicked
-    document.getElementById('cancel').addEventListener('click', (event) =>
+    document.getElementById('cancelBtn').addEventListener('click', (event) =>
     {
         event.preventDefault();
         window.close();
@@ -95,4 +79,78 @@ document.addEventListener('DOMContentLoaded', function ()
                 console.error(`${CONSOLE_PREFIX} Error resetting options:`, error);
             });
     });
+
+    // Load saved options
+    chrome.storage.sync.get(DEFAULT_OPTIONS, (options) =>
+    {
+        console.log(`${CONSOLE_PREFIX} Updating HTML controls to match options object...`, options);
+
+        document.getElementById('alignActiveTabGroup').value = options.alignActiveTabGroup;
+        document.getElementById('compactOnActivateUngroupedTab').checked = options.compactOnActivateUngroupedTab;
+        document.getElementById('collapsePreviousActiveGroupOnActivateUngroupedTab').checked = options.collapsePreviousActiveGroupOnActivateUngroupedTab;
+
+        document.getElementById('moveNewTabsToGroupOfLastActiveTabInWindow').checked = options.autoGroupNewTabs;
+        document.getElementById('delayCompactOnEnterContentAreaMs').value = options.delayCompactOnEnterContentAreaMs;
+        document.getElementById('delayCompactOnActivateUninjectedTabMs').value = options.delayCompactOnActivateUninjectedTabMs;
+
+    });
+
+    chrome.tabGroups.query({})
+        .then((tabGroups) =>
+        {
+            const tabGroupTitles = tabGroups.map((group) => group.title);
+
+            document.getElementById('addAutoGroup').addEventListener('click', (event) =>
+            {
+                event.preventDefault();
+
+                let autoGroupDiv = document.createElement('div');
+
+                autoGroupDiv.appendChild(document.createTextNode("Group: "));
+
+                // add a drop down
+                let tabGroupTitleDropdown = document.createElement('select');
+                tabGroupTitleDropdown.id = 'tabGroupTitle';
+                for (const title of tabGroupTitles)
+                {
+                    let option = document.createElement('option');
+                    option.value = title;
+                    option.text = title;
+                    tabGroupTitleDropdown.appendChild(option);
+                }
+                autoGroupDiv.appendChild(tabGroupTitleDropdown);
+
+                let rulesDiv = document.createElement('div');
+                rulesDiv.classList.add('autoGroupingRulesPanel');
+                rulesDiv.appendChild(document.createTextNode("Rules go here"));
+
+                // add an "add rule"
+                let addRule = document.createElement('a');
+                addRule.href = "#";
+                addRule.append(document.createTextNode("Add Rule"));
+                // TODO: add functionality
+                autoGroupDiv.appendChild(addRule);
+
+                // add a "remove group"
+                let removeGroup = document.createElement('a');
+                removeGroup.href = "#";
+                removeGroup.append(document.createTextNode("Remove Group"));
+                removeGroup.addEventListener('click', (event) =>
+                {
+                    event.preventDefault();
+                    autoGroupDiv.remove();
+                });
+                autoGroupDiv.appendChild(removeGroup);
+
+                autoGroupDiv.appendChild(rulesDiv);
+
+                document.getElementById('autoGroupingRules').append(autoGroupDiv)
+            });
+        })
+        .catch((err) =>
+        {
+            console.error(`${CONSOLE_PREFIX} Error fetching tab groups to populate drop-down`, err);
+        });
+
+
 });

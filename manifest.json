@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "Tab Groups Plus",
     "short_name": "Tab Groups +",
-    "version": "1.5.1",
+    "version": "1.5.2",
     "description": "Auto-collapses inactive tab groups, aligns the active tab group, and adds new tabs to the currently active tab's group",
     "author": "ben@kennish.net",
     "homepage_url": "https://github.com/BenKennish/TabGroupsPlus",
@@ -30,11 +30,13 @@
         }
     ],
     //"host_permissions" - would allow us to inject content scripts in dynamically (and see https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions#host-permissions)
-    //"options_page": "options.html",
+    "options_page": "options.html",
+    /*
     "options_ui": {
         "page": "options.html",
         "open_in_tab": false
     },
+    */
     "action": {
         "default_title": "Tab Groups Plus"
     },

@@ -12,9 +12,8 @@
     <form id="options-form" class="options-form">
 
         <div class="form-row">
-            <label for="alignActiveTabGroup"
-                   title="Automatically align the active tab group in the tab strip."
-                   class="form-label">
+            <label for="alignActiveTabGroup" title="Automatically align the active tab group in the tab strip."
+                class="form-label">
                 Auto-align active tab group:
             </label>
             <select id="alignActiveTabGroup" name="alignActiveTabGroup" class="form-input">
@@ -25,64 +24,49 @@
         </div>
 
         <div class="form-row">
-            <label for="compactOnActivateUngroupedTab"
-                   title="Compact groups when an ungrouped tab becomes active."
-                   class="form-label">
-            Compact on ungrouped tab activate:
+            <label for="compactOnActivateUngroupedTab" title="Compact groups when an ungrouped tab becomes active."
+                class="form-label">
+                Compact on ungrouped tab activate:
             </label>
-            <input type="checkbox"
-                   id="compactOnActivateUngroupedTab"
-                   name="compactOnActivateUngroupedTab"
-                   class="form-input">
+            <input type="checkbox" id="compactOnActivateUngroupedTab" name="compactOnActivateUngroupedTab"
+                class="form-input">
         </div>
 
         <!-- this bit could be hidden when compactOnActivateUngroupedTab is not enabled -->
         <div class="form-row">
             <label for="collapsePreviousActiveGroupOnActivateUngroupedTab"
-                   title="Collapse the previously active group when activating an ungrouped tab."
-                   class="form-label">
+                title="Collapse the previously active group when activating an ungrouped tab." class="form-label">
                 Collapse previous group on ungrouped activate:
             </label>
-            <input type="checkbox"
-                   id="collapsePreviousActiveGroupOnActivateUngroupedTab"
-                   name="collapsePreviousActiveGroupOnActivateUngroupedTab"
-                   class="form-input">
+            <input type="checkbox" id="collapsePreviousActiveGroupOnActivateUngroupedTab"
+                name="collapsePreviousActiveGroupOnActivateUngroupedTab" class="form-input">
         </div>
 
         <div class="form-row">
             <label for="moveNewTabsToGroupOfLastActiveTabInWindow"
-                   title="Place new tabs into the same group as the window's previously active tab."
-                   class="form-label">
+                title="Place new tabs into the same group as the window's previously active tab." class="form-label">
                 Auto-group new tabs:
             </label>
-            <input type="checkbox"
-                   id="moveNewTabsToGroupOfLastActiveTabInWindow"
-                   name="moveNewTabsToGroupOfLastActiveTabInWindow"
-                   class="form-input">
+            <input type="checkbox" id="moveNewTabsToGroupOfLastActiveTabInWindow"
+                name="moveNewTabsToGroupOfLastActiveTabInWindow" class="form-input">
         </div>
 
         <div class="form-row">
             <label for="delayCompactOnEnterContentAreaMs"
-                   title="Delay before compacting after the pointer enters page content."
-                   class="form-label">
+                title="Delay before compacting after the pointer enters page content." class="form-label">
                 Compact delay on content enter (ms):
             </label>
-            <input type="number"
-                   id="delayCompactOnEnterContentAreaMs"
-                   name="delayCompactOnEnterContentAreaMs"
-                   class="form-input form-input-narrow">
+            <input type="number" id="delayCompactOnEnterContentAreaMs" name="delayCompactOnEnterContentAreaMs"
+                class="form-input form-input-narrow">
         </div>
 
         <div class="form-row">
             <label for="delayCompactOnActivateUninjectedTabMs"
-                   title="Delay before compacting when a system non-injected tab is activated."
-                   class="form-label">
+                title="Delay before compacting when a system non-injected tab is activated." class="form-label">
                 Compact delay on system tab activate (ms):
             </label>
-            <input type="number"
-                   id="delayCompactOnActivateUninjectedTabMs"
-                   name="delayCompactOnActivateUninjectedTabMs"
-                   class="form-input form-input-narrow">
+            <input type="number" id="delayCompactOnActivateUninjectedTabMs" name="delayCompactOnActivateUninjectedTabMs"
+                class="form-input form-input-narrow">
         </div>
 
         <div class="form-spacer"></div>
@@ -90,58 +74,60 @@
         <!-- TODO: put the autoGrouping stuff here -->
         <!-- if this is disabled, grey out and disable the options below -->
         <div class="form-row">
-            <label for="autoGroupingEnabled"
-                   title="Enable rule-based auto grouping by URL."
-                   class="form-label">
+            <label for="autoGroupingEnabled" title="Enable rule-based auto grouping by URL." class="form-label">
                 Enable URL auto-grouping:
             </label>
-            <input type="checkbox"
-                   id="autoGroupingEnabled"
-                   name="autoGroupingEnabled"
-                   class="form-input">
+            <input type="checkbox" id="autoGroupingEnabled" name="autoGroupingEnabled" class="form-input">
         </div>
 
         <div class="form-row">
-            <label for="autoGroupingChecksExistingTabs"
-                   title="Apply auto-grouping rules to already open tabs."
-                   class="form-label">
+            <label for="autoGroupingChecksExistingTabs" title="Apply auto-grouping rules to already open tabs."
+                class="form-label">
                 Check existing tabs:
             </label>
-            <input type="checkbox"
-                   id="autoGroupingChecksExistingTabs"
-                   name="autoGroupingChecksExistingTabs"
-                   class="form-input">
+            <input type="checkbox" id="autoGroupingChecksExistingTabs" name="autoGroupingChecksExistingTabs"
+                class="form-input">
         </div>
 
-        <!--
+        <div class="form-row" id="autoGroupingRulesPanel">
+
+            <!--
         here we want a panel where the user can select groups that should be autogroups and add/edit/delete rules and patterns for it
         something like this where
         (  ) is a drop down
         [  ] is a text box
         {  } is a button (or link) ...
 
-            Group ( Streaming v )  { Delete }
+            Group ( Streaming v )  { Add Rule } { Delete }
                 Type ( Domain v )   Value: [ youtube.com       ] { Edit } { Delete }
                 Type ( Domain v )   Value: [ twitch.tv         ] { Edit } { Delete }
                 Type ( Regexp v )   Value: [ ^https?://([^/]+)/\\?test=autogroup ]  { Edit } { Delete }
-            Group ( AI v )  { Delete }
+            Group ( AI v )  { Add Rule } { Delete }
                 Type ( Domain v )   Value: [ chatgpt.com    ] { Edit } { Delete }
                 Type ( Domain v )   Value: [ gemini.google.com    ] { Edit } { Delete }
             { Add AutoGroup }
 
         -->
 
-        <div class="form-row">
+            <div id="autoGroupingRules">
+                <!-- rules get added here -->
+            </div>
 
+            <div id="addAutoGroupRow">
+                <a id="addAutoGroup" href="#">Add AutoGroup</a>
+            </div>
+        </div>
+
+        <!-- final buttons -->
+        <div class="form-row">
             <span>
                 <button type="submit">Save</button>
-                <button id="cancel">Cancel</button>
+                <button id="cancelBtn">Cancel</button>
             </span>
 
             <span class="form-cancel-btn">
                 <button id="resetBtn">Reset to Default</button>
             </span>
-
         </div>
 
     </form>

@@ -37,3 +37,7 @@
 .form-input-narrow {
     width: 50px;
 }
+
+#autoGroupingRulesPanel {
+    border: 1px dashed black;
+}
