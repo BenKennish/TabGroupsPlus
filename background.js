@@ -28,6 +28,7 @@ const LISTEN_DELAY_ON_BROWSER_STARTUP_MS = 10000;
 const CHECK_GROUPING_DELAY_ON_CREATE_TAB_MS = 250;
 
 // enable/disable console.debug() messages
+// yes, the user can filter these out of the console if they want, but this allows cutting them out for performance reasons
 const SHOW_DEBUG_CONSOLE_MSGS = true;
 
 // setting to true requires setting "host_permissions" in manifest.json and adding the "scripting" permission
@@ -1693,6 +1694,8 @@ async function testClosingTabFromSavedGroup(closeAll = false)
 
 
 // ====================================================
+// ====================================================
+//           MAIN SCRIPT LOGIC STARTS HERE
 // ====================================================
 // ====================================================
 
