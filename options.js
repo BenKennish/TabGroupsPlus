@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () =>
 
                 // add a drop down
                 let tabGroupTitleDropdown = document.createElement('select');
-                tabGroupTitleDropdown.id = 'tabGroupTitle';
+                tabGroupTitleDropdown.id = 'tabGroupTitle'; // FIXME: not unique
                 for (const title of tabGroupTitles)
                 {
                     let option = document.createElement('option');
