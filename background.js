@@ -881,11 +881,11 @@ function getAutoGroup(url)
 
     for (const [autoGroupName, autoGroupRules] of Object.entries(userOptions.autoGroupRules))
     {
-        console.debug(`Examining auto group rules for group ${autoGroupName}:`, autoGroupRules);
+        console.debug(`${CONSOLE_PREFIX} Examining auto group rules for group ${autoGroupName}:`, autoGroupRules);
 
         const isMatch = autoGroupRules.some((autoGroupRule) =>
         {
-            console.debug(`Checking rule of type ${enumValueToName(AUTO_GROUP_PATTERN_TYPE, autoGroupRule.type)} with pattern:`, autoGroupRule.pattern);
+            console.debug(`${CONSOLE_PREFIX} Checking rule of type ${enumValueToName(AUTO_GROUP_PATTERN_TYPE, autoGroupRule.type)} with pattern:`, autoGroupRule.pattern);
             return doesAutoGroupRuleMatch(autoGroupRule, url, hostname);
         });
 
