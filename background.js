@@ -156,7 +156,6 @@ function saveWindowData()
         .then(() =>
         {
             console.debug(CONSOLE_PREFIX + ' windowData saved to local storage:', winDataProperties);
-            console.log(CONSOLE_PREFIX + " >>> windowData saved to local storage");
         })
         .catch((err) =>
         {
@@ -383,7 +382,7 @@ async function collapseTabGroupsInWindow(windowId, excludeGroupId)
 //
 async function compactGroups(activeTab)
 {
-    console.log(CONSOLE_PREFIX + " >>>>>>>>>>> compactGroups() running for window " + activeTab.windowId + ", active tab is:", activeTab);
+    console.log(CONSOLE_PREFIX + " >>>> compactGroups() running for window " + activeTab.windowId + ", active tab is:", activeTab);
 
     // sanity checks
     if (activeTab.active === false)
@@ -433,7 +432,7 @@ async function compactGroups(activeTab)
     // NB: we still do step A on a tab change within the same group to tidy up any user-expanded groups
     if (activeTab.groupId === thisWindowData.groupActiveDuringLastCompactId)
     {
-        console.log(CONSOLE_PREFIX + " Active tab's group was the one moved in the last compact.  All done");
+        console.debug(CONSOLE_PREFIX + " Active tab's group was active during last compact.  All done");
         return;
     }
 
@@ -453,10 +452,10 @@ async function compactGroups(activeTab)
         // ==================================================================
         // (B) restore the position of the *previously* active group (if there is one)
         // ==================================================================
-        console.log(CONSOLE_PREFIX + " ==== (B) Restoring position of group previously moved during compact...");
+        console.log(CONSOLE_PREFIX + " ==== (B) Restoring position of previously active group (that was moved during previous compact)...");
 
-        console.log(CONSOLE_PREFIX + " groupActiveDuringLastCompactId:", thisWindowData.groupActiveDuringLastCompactId);
-        console.log(CONSOLE_PREFIX + " groupActiveDuringLastCompactPrevPos:", thisWindowData.groupActiveDuringLastCompactPrevPos);
+        console.debug(CONSOLE_PREFIX + " groupActiveDuringLastCompactId:", thisWindowData.groupActiveDuringLastCompactId);
+        console.debug(CONSOLE_PREFIX + " groupActiveDuringLastCompactPrevPos:", thisWindowData.groupActiveDuringLastCompactPrevPos);
 
         let tabIndexToMoveTo = null;
 
@@ -508,7 +507,7 @@ async function compactGroups(activeTab)
                     // fetch the tab index of the first tab of the group that's currently at this group index position
                     tabIndexToMoveTo = await getIndexOfFirstTabInGroup(groupsOrdered[thisWindowData.groupActiveDuringLastCompactPrevPos]);
 
-                    console.log(`${CONSOLE_PREFIX} ... leftmost tab has index`, tabIndexToMoveTo);
+                        console.debug(`${CONSOLE_PREFIX} ... leftmost tab has index`, tabIndexToMoveTo);
 
                 }
                 else
