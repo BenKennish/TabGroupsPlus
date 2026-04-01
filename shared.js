@@ -58,7 +58,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
     // UNIMPLEMENTED
     // problematic as extensions cannot access Chrome's saved groups that are closed (that can sit on the bookmarks bar) so we might end up creating a new groups instead of reusing existing closed saved group
     //autoGroupingCanCreateGroups: true,
-    // currently not possible to open closed tab groups (within saved groups)
+    // currently not possible to open any tab groups that are closed (but saved within saved groups)
     //autoGroupingCanOpenGroups: true,
 
     // UNIMPLEMENTED
@@ -70,22 +70,22 @@ export const DEFAULT_OPTIONS = Object.freeze({
 
     // maps tab group names to lists of rules that define which tabs get auto-grouped into that group
     autoGroupRules: {
-        'Streaming 📺':
+        'Streaming':
             [
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'youtube.com' },
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'twitch.tv' },
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'netflix.com' }
             ],
-        'Guild Wars 2 🐲':
+        'Guild Wars 2':
             [
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'guildwars2.com' }
             ],
         'Testing':
             [
-                // any URL where the first GET param is "test=autogroup" gets put in the tab group called "Testing"
-                { type: AUTO_GROUP_PATTERN_TYPE.REGEXP, pattern: '^https?://([^/]+)/\\?test=autogroup', regexpCompiled: null }
+                // any URL with a GET param "test=autogroup" gets added to the "Testing" tab group
+                { type: AUTO_GROUP_PATTERN_TYPE.REGEXP, pattern: '^https?://([^/]+)/[\\?&]test=autogroup', regexpCompiled: null }
             ],
-        'Shopping 🛒':
+        'Shopping':
             [
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'amazon.co.uk' },
             ],
@@ -94,7 +94,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'mail.google.com' },
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'calendar.google.com' }
             ],
-        'AI 🧠':
+        'AI':
             [
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'gemini.google.com' },
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'perplexity.ai' },
@@ -103,7 +103,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
         'Overwatch':
             [
                 // an example of why you might want domainname pattern to match anywhere within the domain rather than just at the end
-                //  - matching 'overwatch' would be nicer
+                //  - matching 'overwatch' would be nicer, but this is hardly a tragedy
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'overwatch.blizzard.com' },
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'overwatch.fandom.com' },
             ]
