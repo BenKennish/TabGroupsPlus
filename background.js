@@ -10,8 +10,6 @@
 // (i.e. they are not updated when the tabs are updated elsewhere)
 
 
-// FIXME: userOptions.alignActiveTabGroup === ALIGN.RIGHT  has not been fully implemented
-
 import { ALIGN, DEFAULT_OPTIONS, CONSOLE_PREFIX, AUTO_GROUP_PATTERN_TYPE } from './shared.js';
 
 // timeout (ms) for receiving the browser's onStartup event
@@ -46,9 +44,11 @@ const tabsAwaitingFirstUrl = new Set();
 // maps window ID to an object about that window (see newWindowDataObj below)
 // don't touch this directly - use getWindowData() to access it
 // and call saveWindowData() to save it back to local storage
+//
+// FIXME: this should probably all be encapsulated in an object or something
 let globalWindowDataMap = new Map();
 
-// example of data structure within the windowData map defined above
+// example of data structure within globalWindowDataMap
 // this is used as a template/'constructor' for new window data objects
 const newWindowDataObj = {
 
@@ -78,123 +78,6 @@ const newWindowDataObj = {
 // ============================================================================
 // ============================================================================
 // ============================================================================
-
-
-
-// retrieve data for a window, creating a new entry in the Map if necessary
-//
-function getWindowData(windowId, forceNew = false)
-{
-    try
-    {
-        if (!globalWindowDataMap.has(windowId) || forceNew)
-        {
-            // initialise a new windowData object for this window
-
-            const thisWindowData = { ...newWindowDataObj };
-            globalWindowDataMap.set(windowId, thisWindowData);
-
-            if (userOptions.alignActiveTabGroup !== ALIGN.DISABLED)
-            {
-                // we are set to align the active tab group so
-                // we need to create sensible default assumptions for groupActiveDuringLastCompactId and lastMovedGroupPrevPos
-
-                getTabGroupsOrdered(windowId, chrome.tabGroups.TAB_GROUP_ID_NONE).then((groupsOrdered) =>
-                {
-
-                    switch (userOptions.alignActiveTabGroup)
-                    {
-                        case ALIGN.LEFT:
-                            // pretend the leftmost tabgroup (might be active, might not) was the last active one and was previously in group index position 0 (leftmost)
-                            thisWindowData.groupActiveDuringLastCompactId = groupsOrdered.length > 0 ? groupsOrdered[0].id : chrome.tabGroups.TAB_GROUP_ID_NONE;
-                            thisWindowData.lastMovedGroupPrevPos = 0;
-                            break;
-
-                        case ALIGN.RIGHT:
-                            // pretend the rightmost tabgroup (might be active, might not) was the last active one and was previously in the largers group index position (rightmost)
-                            thisWindowData.groupActiveDuringLastCompactId = groupsOrdered.length > 0 ? groupsOrdered[groupsOrdered.length - 1].id : chrome.tabGroups.TAB_GROUP_ID_NONE;
-                            thisWindowData.lastMovedGroupPrevPos = groupsOrdered.length - 1;
-                            break;
-                    }
-                    console.log(`${CONSOLE_PREFIX} Initialized windowData entry for window ${windowId}`);
-
-                }).catch((err) =>
-                {
-                    console.error('Error retrieving ordered tab groups in getWindowData()', err);
-                });
-
-            }
-
-        }
-        return globalWindowDataMap.get(windowId);
-    }
-    catch (err)
-    {
-        console.error(`${CONSOLE_PREFIX} getWindowData failed:`, err);
-        throw err;
-    }
-}
-
-
-
-// save the globalWindowDataMap to local storage
-//
-function saveWindowData()
-{
-    // globalWindowDataMap is a Map of objects
-    // we store it as an array of objects with methods stripped
-
-    // Convert each element back to a plain object
-    const winDataProperties = Array.from(globalWindowDataMap.entries()).map(([winId, winData]) =>
-    {
-        // TODO: we could strip out the compactTimer property here
-        return [winId, { ...winData }]; // spread (...) copies only own properties, no methods
-    });
-
-
-    chrome.storage.local.set({ windowData: winDataProperties })
-        .then(() =>
-        {
-            console.debug(CONSOLE_PREFIX + ' windowData saved to local storage:', winDataProperties);
-        })
-        .catch((err) =>
-        {
-            console.error(`${CONSOLE_PREFIX} Failed to save windowData to local storage:`, err);
-        });
-
-}
-
-
-
-// check if our content script has been injected into the tab with id `tabId`
-// content script cannot inject into certain content, e.g. "about:blank", Google Web Store, browser settings, etc
-// returns true if the content script responds to a ping, false otherwise
-//
-async function isContentScriptActive(tabId)
-{
-    //return false;
-
-    try
-    {
-        let response = await chrome.tabs.sendMessage(tabId, { action: "ping" });
-        console.debug('Content script replied to ping with : ', response);
-
-        if (response.status && response.status === "pong")
-        {
-            return true;
-        }
-        else
-        {
-            console.warn('Content script replied to ping BUT with unexpected response: ', response)
-        }
-        return false;
-    }
-    catch (err)
-    {
-        console.debug('Failed to ping content script:', err);
-        return false;
-    }
-}
 
 
 // return an array of tab groups in a window in the left-to-right display order
@@ -270,6 +153,139 @@ async function getTabGroupsOrdered(windowId, excludeId)
 }
 
 
+// retrieve data for a window, creating a new entry in the Map if necessary
+// if we are configured to align the active tab group, sensible defaults are filled in, but asynchronously)
+function getWindowData(windowId, forceNew = false)
+{
+    try
+    {
+        if (forceNew || !globalWindowDataMap.has(windowId))
+        {
+            // initialise a new windowData object for this window
+            // using spread operator to create a shallow copy of the newWindowDataObj template object and only its enumerable (non-inherited) properties
+            const thisWindowData = { ...newWindowDataObj };
+            globalWindowDataMap.set(windowId, thisWindowData);
+
+            if (userOptions.alignActiveTabGroup !== ALIGN.DISABLED)
+            {
+                // we are set to align the active tab group so
+                // we need to create sensible default assumptions for groupActiveDuringLastCompactId and lastMovedGroupPrevPos
+
+                // this initialisation is done asynchronously because we can populate it later or not at all
+                getTabGroupsOrdered(windowId, chrome.tabGroups.TAB_GROUP_ID_NONE).then((groupsOrdered) =>
+                {
+                    switch (userOptions.alignActiveTabGroup)
+                    {
+                        case ALIGN.LEFT:
+                            // pretend that the leftmost tabgroup (might be active, might not) was the one that was aligned left in the last compact operation
+                            // and that it was previously in group index position 0 (leftmost)
+                            thisWindowData.groupActiveDuringLastCompactId = groupsOrdered.length > 0 ? groupsOrdered[0].id : chrome.tabGroups.TAB_GROUP_ID_NONE;
+                            thisWindowData.lastMovedGroupPrevPos = 0;
+                            break;
+
+                        case ALIGN.RIGHT:
+                            // pretend the rightmost tabgroup (might be active, might not) was the one aligned right in the last compact operation
+                            // and that it was previously in the largest group index position (rightmost)
+                            thisWindowData.groupActiveDuringLastCompactId = groupsOrdered.length > 0 ? groupsOrdered[groupsOrdered.length - 1].id : chrome.tabGroups.TAB_GROUP_ID_NONE;
+                            thisWindowData.lastMovedGroupPrevPos = groupsOrdered.length - 1;
+                            break;
+                    }
+                    console.log(`${CONSOLE_PREFIX} Initialized windowData entry for window ${windowId}`);
+
+                }).catch((err) =>
+                {
+                    console.error('Error retrieving ordered tab groups in getWindowData()', err);
+                });
+
+            }
+
+        }
+        return globalWindowDataMap.get(windowId);
+    }
+    catch (err)
+    {
+        console.error(`${CONSOLE_PREFIX} getWindowData failed:`, err);
+        throw err;
+    }
+}
+
+
+
+// save the globalWindowDataMap to local storage
+// doesn't guarantee that the data is actually saved before the function returns, but it does guarantee that the save operation has been initiated and any errors will be logged to the console
+//
+function saveWindowData()
+{
+    // globalWindowDataMap is a Map of objects
+    // we store it into chrome.storage.local as an array of arrays which contain winId and the corresonding plain objects for that window (no methods)
+
+    // Convert each element back to a plain object...
+    // .entries() of an object returns an iterator of the key-value pairs  [ ['name', 'Ben'], ['age', 43] ... ]
+    // Array.from() turns this into a proper array so we can use .map()
+    // we then map it onto a new array
+
+    const winDataProperties = Array.from(globalWindowDataMap.entries()).map(([winId, winData]) =>
+    {
+        // we strip out the compactTimer property before saving because it's transient and we don't need it to persist across sessions
+        // strips out compactTimer using destructuring and "the rest ..." syntax
+        const { compactTimer, ...winDataToSave } = winData
+
+        // winData is a plain object based on newWindowDataObj
+        // all of it's enumerable properties (those directly defined on it and not inherited from its prototype)
+        // are non-function properties (i.e. not "methods")
+        // so when we use the spread operator (...), (same syntax as 'rest' above) and a new object is created
+        // it contains only these non-function enumerable properties
+        return [winId, { ...winDataToSave }];
+    });
+
+
+    // we don't use await here as it's unlikely to fail and we don't need to wait for it to complete before doing anything else
+    chrome.storage.local.set({ windowData: winDataProperties })
+        .then(() =>
+        {
+            console.debug(CONSOLE_PREFIX + ' windowData saved to local storage:', winDataProperties);
+        })
+        .catch((err) =>
+        {
+            console.error(`${CONSOLE_PREFIX} Failed to save windowData to local storage:`, err);
+        });
+
+}
+
+
+
+// check if our content script has been injected into the tab with id `tabId`
+// content script cannot inject into certain content, e.g. "about:blank", Google Web Store, browser settings, etc
+// returns true if the content script responds to a ping, false otherwise
+//
+async function isContentScriptActive(tabId)
+{
+    try
+    {
+        let response = await chrome.tabs.sendMessage(tabId, { action: "ping" });
+        console.debug('Content script replied to ping with : ', response);
+
+        if (response.status && response.status === "pong")
+        {
+            return true;
+        }
+        else
+        {
+            console.warn('Content script replied to ping BUT with unexpected response: ', response)
+        }
+        return false;
+    }
+    catch (err)
+    {
+        console.debug('Failed to ping content script:', err);
+        return false;
+    }
+}
+
+
+
+
+
 // cancel any action timers set for the supplied window ID
 //
 function cancelCompactTimer(windowId)
@@ -298,8 +314,8 @@ async function getIndexOfFirstTabInGroup(group)
         if (tabs.length === 0)
         {
             // should be impossible
-            console.warn(`${CONSOLE_PREFIX} Group titled '${group.title}' has NO TABS!?`, group);
-            return null;
+            console.warn(`${CONSOLE_PREFIX} Group (titled '${group.title}') has NO TABS!?`, group);
+            throw Error(`Group (titled '${group.title}') has no tabs`);
         }
 
         // Find the tab with the minimum index
@@ -313,7 +329,7 @@ async function getIndexOfFirstTabInGroup(group)
     catch (error)
     {
         console.error(`${CONSOLE_PREFIX} Error getting index of first tab in group:`, error);
-        return null;
+        throw error;
     }
 }
 
@@ -330,7 +346,7 @@ async function countTabsInGroup(groupId)
     catch (error)
     {
         console.error(`${CONSOLE_PREFIX} Error counting tabs in group:`, error);
-        return null;
+        throw error;
     }
 }
 
@@ -348,7 +364,7 @@ async function collapseTabGroupsInWindow(windowId, excludeGroupId)
     catch (err)
     {
         console.error(`${CONSOLE_PREFIX} Failed to query tabs of window ${activeTab.windowId}`, err);
-        throw err; //new Error(`Failed to query tabs of window ${activeTab.windowId}: ${err.message}`);
+        throw err;
     }
 
     let groupIds = groups.map(group => group.id);
@@ -744,6 +760,7 @@ function scheduleCompactOtherGroups(tab, delayMs)
         try
         {
             // WARNING: tab objects are not live and may be out of date by the time this runs, so we should avoid using the `tab` object here if possible
+            // but it would mean calling and awaiting chrome.tabs.get()
             await compactGroups(tab);
         }
         catch (err)
@@ -771,10 +788,10 @@ async function isFallbackTab(newTab)
         return false;
     }
 
-    // populate: true, ensure that the .tabs property of the win object is filled
     let win;
     try
     {
+        // populate: true, ensure that the .tabs property of the win object is filled
         win = await chrome.windows.get(newTab.windowId, { populate: true });
     }
     catch (err)
@@ -1014,32 +1031,38 @@ function onActivateUninjectableTab(tabId)
 {
     console.log(`${CONSOLE_PREFIX} >>> Activated uninjectable tab ${tabId}...`);
 
-    chrome.tabs.get(tabId, (activeTab) =>
-    {
-        if (chrome.runtime.lastError)
+    chrome.tabs.get(tabId)
+        .then((activeTab) =>
         {
-            console.error(`${CONSOLE_PREFIX} Failed to get activated tab ${tabId}`, chrome.runtime.lastError);
-            return;
-        }
+            if (chrome.runtime.lastError)
+            {
+                console.error(`${CONSOLE_PREFIX} Failed to get activated tab ${tabId}`, chrome.runtime.lastError);
+                return;
+            }
 
-        let winData = getWindowData(activeTab.windowId);
+            let winData = getWindowData(activeTab.windowId);
 
-        if (winData.newTabId === activeTab.id)
-        {
-            console.log(CONSOLE_PREFIX + " Ignoring first activation of newly created tab", activeTab.id)
-            winData.newTabId = null;
-            return;
-        }
+            if (winData.newTabId === activeTab.id)
+            {
+                console.log(CONSOLE_PREFIX + " Ignoring first activation of newly created tab", activeTab.id)
+                winData.newTabId = null;
+                return;
+            }
 
-        scheduleCompactOtherGroups(activeTab, userOptions.delayCompactOnActivateUninjectedTabMs);
-    });
+            scheduleCompactOtherGroups(activeTab, userOptions.delayCompactOnActivateUninjectedTabMs);
+        },
+            (err) =>
+            {
+                console.error(`${CONSOLE_PREFIX} Failed to get activated tab ${tabId}`, err);
+            }
+        );
 }
 
 // Listen for tab activation to schedule collapse of non-active groups
 // used as a fallback to trigger compaction when the content script
 //   can't be injected into the active tab's content pane
 //
-function onTabActivated(activeInfo)
+async function onTabActivated(activeInfo)
 {
     // activeInfo is an object with
     //  activeInfo.tabId
@@ -1059,69 +1082,67 @@ function onTabActivated(activeInfo)
 
     console.debug(CONSOLE_PREFIX + " >>> onActivated tab id:", activeInfo.tabId);
 
-    isContentScriptActive(activeInfo.tabId).then((isInjected) =>
+    if (await isContentScriptActive(activeInfo.tabId))
     {
-        if (isInjected)
-        {
-            console.debug(`${CONSOLE_PREFIX} Activated tab ${activeInfo.tabId} already has content script injected`);
+        console.debug(`${CONSOLE_PREFIX} Activated tab ${activeInfo.tabId} already has content script injected`);
 
-            // we might have triggered a collapse-and-move from clicking a system tab and then have switched to this tab
-            // so we cancel any ticking timers
-            cancelCompactTimer(activeInfo.windowId);
-            return;
-        }
+        // we might have triggered a collapse-and-move from clicking a system tab and then have switched to this tab
+        // so we cancel any ticking timers
+        cancelCompactTimer(activeInfo.windowId);
+        return;
+    }
 
-        if (!DYNAMIC_INJECTS)
+    if (!DYNAMIC_INJECTS)
+    {
+        console.log(`${CONSOLE_PREFIX} Activated tab ${activeInfo.tabId} has no content script injected and dynamic injects are disabled`);
+        onActivateUninjectableTab(activeInfo.tabId);
+        return;
+    }
+
+    // remove/comment this line if uncommenting the code for dynamic injected below
+    console.error(`${CONSOLE_PREFIX} Activated tab ${activeInfo.tabId} has no content script injected and dynamic injects are enabled but the code is commented out.`);
+
+    // try to dynamically inject content script
+    // you can comment out if DYNAMIC_INJECTS is false
+    // to stop Google complaining that the manifest.json lacks 'scripting' permission
+    /*
+    chrome.scripting.executeScript({ target: { tabId: activeInfo.tabId }, files: ["content.js"], injectImmediately: true }, () =>
+    {
+        if (chrome.runtime.lastError)
         {
-            console.log(`${CONSOLE_PREFIX} Activated tab ${activeInfo.tabId} has no content script injected and dynamic injects are disabled`);
+            // this tab doesn't support content script (e.g. about:blank, Google Web Store, browser settings)
+            switch (chrome.runtime.lastError.message)
+            {
+                // expected injection fails:
+                case "Cannot access a chrome:// URL":
+                case "The extensions gallery cannot be scripted.":
+                case "Cannot access a chrome-extension:// URL of different extension":
+                case "Extension manifest must request permission to access this host":
+                    // the last one tends to happen when a chrome:// URL tab is not yet loaded when activated
+
+                    console.log(`${CONSOLE_PREFIX} Expected error injecting into tab ${activeInfo.tabId}:`, chrome.runtime.lastError.message);
+                    break;
+                // unexpected injection fails:
+                default:
+                    const errMsg = chrome.runtime.lastError.message;
+
+                    const tab = chrome.tabs.get(activeInfo.tabId).then((tab) =>
+                    {
+                        console.error(`${CONSOLE_PREFIX} Unexpected error injecting into tab ${tab.id}: ${errMsg}`, tab);
+                    });
+
+            }
+
             onActivateUninjectableTab(activeInfo.tabId);
-            return;
         }
-
-        // remove/comment this line if uncommenting the code for dynamic injected below
-        console.error(`${CONSOLE_PREFIX} Activated tab ${activeInfo.tabId} has no content script injected and dynamic injects are enabled but the code is commented out.`);
-
-        // try to dynamically inject content script
-        // you can comment out if DYNAMIC_INJECTS is false
-        // to stop Google complaining that the manifest.json lacks 'scripting' permission
-        /*
-        chrome.scripting.executeScript({ target: { tabId: activeInfo.tabId }, files: ["content.js"], injectImmediately: true }, () =>
+        else
         {
-            if (chrome.runtime.lastError)
-            {
-                // this tab doesn't support content script (e.g. about:blank, Google Web Store, browser settings)
-                switch (chrome.runtime.lastError.message)
-                {
-                    // expected injection fails:
-                    case "Cannot access a chrome:// URL":
-                    case "The extensions gallery cannot be scripted.":
-                    case "Cannot access a chrome-extension:// URL of different extension":
-                    case "Extension manifest must request permission to access this host":
-                        // the last one tends to happen when a chrome:// URL tab is not yet loaded when activated
-
-                        console.log(`${CONSOLE_PREFIX} Expected error injecting into tab ${activeInfo.tabId}:`, chrome.runtime.lastError.message);
-                        break;
-                    // unexpected injection fails:
-                    default:
-                        const errMsg = chrome.runtime.lastError.message;
-
-                        const tab = chrome.tabs.get(activeInfo.tabId).then((tab) =>
-                        {
-                            console.error(`${CONSOLE_PREFIX} Unexpected error injecting into tab ${tab.id}: ${errMsg}`, tab);
-                        });
-
-                }
-
-                onActivateUninjectableTab(activeInfo.tabId);
-            }
-            else
-            {
-                console.log(CONSOLE_PREFIX + " Content script injected into activated tab", activeInfo.tabId);
-            }
-        });
-        */
-
+            console.log(CONSOLE_PREFIX + " Content script injected into activated tab", activeInfo.tabId);
+        }
     });
+    */
+
+
 }
 
 
@@ -1549,9 +1570,9 @@ function deregisterListeners()
 
 // activate the extension
 //
-function startUp()
+async function startUp()
 {
-    console.log(CONSOLE_PREFIX + " >>>>>>>>>>>>>> Starting up...");
+    console.log(CONSOLE_PREFIX + " >>>>>>>> Starting up...");
     registerListeners();
     browserStartingUp = false;
 
@@ -1566,56 +1587,51 @@ function startUp()
     });
     */
 
-    // windowData is stored in storage because
-    chrome.storage.local.get(['windowData'])
-        .then((got) =>
+    try
+    {
+        // windowData is stored in storage rather than just as a global variable because
+        // the extension service worker can be terminated and restarted by the browser at any time,
+        // and we want this data to persist
+        const got = await chrome.storage.local.get(['windowData']);
+        if (got.windowData)
         {
-            if (got.windowData)
-            {
-                console.log(CONSOLE_PREFIX + " Retrieved windowData from local storage", got.windowData);
+            console.log(CONSOLE_PREFIX + " Retrieved windowData from local storage", got.windowData);
 
-                // look at all the current windows
-                chrome.windows.getAll({ populate: false, windowTypes: ['normal'] }).then((allWindows) =>
+            // look at all the current windows
+            const allWindows = await chrome.windows.getAll({ populate: false, windowTypes: ['normal'] });
+            const allWindowIds = allWindows.map(win => win.id);
+
+            // if a new window was created while we weren't running and
+            // it happens to have the same ID as a different window that was closed while we weren't running
+            // i don't think there's a lot we can do
+
+            // verify that these window IDs are still valid - filter out all entries for windows that no longer exist
+            globalWindowDataMap = new Map(got.windowData.filter(([winId, winData]) =>
+            {
+                if (allWindowIds.includes(winId))
                 {
-                    const allWindowIds = allWindows.map(win => win.id);
+                    return true;
+                }
+                console.warn(CONSOLE_PREFIX + " Window vanished since last windowData save: ", winId);
+                return false;
+            }));
 
-                    // if a window just happens to have the same ID as a previously closed window
-                    // i don't think there's a lot we can do
+            // Initialize windowData objects for any window with IDs not already present
+            await Promise.all(allWindows.map(win => getWindowData(win.id)));
 
-                    // filter out all entries for windows that no longer exist
-                    globalWindowDataMap = new Map(got.windowData.filter(([winId, winData]) =>
-                    {
-                        if (allWindowIds.includes(winId))
-                        {
-                            return true;
-                        }
-                        console.warn(CONSOLE_PREFIX + " Window vanished since last windowData save: ", winId);
-                        return false;
-                    }));
+            saveWindowData();  // save the pruned and initialised windowData back to local storage
+            console.log(CONSOLE_PREFIX + " Finished pruning and initialising globalWindowDataMap:", globalWindowDataMap);
 
-                    allWindows.forEach((win) =>
-                    {
-                        getWindowData(win.id);  // this will initialise windowData objects for any window with IDs not already present
-                    });
-
-                    saveWindowData();  // save the pruned and initialised windowData back to local storage
-                    console.log(CONSOLE_PREFIX + " Finished pruning and initialising globalWindowDataMap:", globalWindowDataMap);
-
-                });
-
-                // TODO: wipe any windows from result.windowData that no longer exist
-
-            }
-            else
-            {
-                console.warn(CONSOLE_PREFIX + " Empty windowData found in local storage. Ignoring");
-            }
-        })
-        .catch((err) =>
+        }
+        else
         {
-            console.error(CONSOLE_PREFIX + " Failed to retrieve windowData from local storage:", err);
-        })
-
+            console.warn(CONSOLE_PREFIX + " Empty windowData found in local storage. Ignoring");
+        }
+    }
+    catch (err)
+    {
+        console.error(CONSOLE_PREFIX + " Failed to retrieve windowData from local storage:", err);
+    }
 }
 
 
