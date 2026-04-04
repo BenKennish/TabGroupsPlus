@@ -80,6 +80,32 @@ const newWindowDataObj = {
 // ============================================================================
 
 
+
+// given an enum object and a value, return the name of the enum member with that value, or null if not found
+//
+function enumValueToName(value, enumObj)
+{
+    for (const [key, val] of Object.entries(enumObj))
+    {
+        if (val === value)
+        {
+            return key;
+        }
+    }
+    return null;
+}
+
+
+
+// given an enum object and a value, return true if the value is a valid member of the enum, false otherwise
+//
+function isValidEnumValue(value, enumObj)
+{
+    return Object.values(enumObj).includes(value);
+}
+
+
+
 // return an array of tab groups in a window in the left-to-right display order
 // excluding any group with ID `excludeId`
 // if `excludeId` is chrome.tabGroups.TAB_GROUP_ID_NONE, don't exclude any group
