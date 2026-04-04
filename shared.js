@@ -6,7 +6,9 @@
 // because it makes tracking errors down easier w.r.t line numbers
 export const CONSOLE_PREFIX = "[TGP]";
 
-// constant object to fake an 'enum'
+// constant objects to fake an 'enum's - not great because multiple properties can have the same value
+// but it makes for more readable code and we can at least have a helper function to check if a value is a valid enum value (e.g. for validating user options)
+//
 // the numbers for LEFT and RIGHT conveniently match the tab index locations
 // to move the active group to (start and end respectively)
 export const ALIGN = Object.freeze({
@@ -14,8 +16,8 @@ export const ALIGN = Object.freeze({
     RIGHT: -1,
     DISABLED: 42
 });
-
-// constant object to fake an 'enum' for the types of auto-grouping patterns
+//
+// types of auto-grouping patterns
 export const AUTO_GROUP_PATTERN_TYPE = Object.freeze({
     DOMAINNAME: 0,
     REGEXP: 1
