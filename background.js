@@ -14,10 +14,11 @@ import { ALIGN, DEFAULT_OPTIONS, CONSOLE_PREFIX, AUTO_GROUP_PATTERN_TYPE } from 
 
 // timeout (ms) for receiving the browser's onStartup event
 // if we receive this in time, we know to wait longer for initialisation of windows, tabs, and groups
-const ON_STARTUP_WAIT_TIMEOUT_MS = 500;
+const ON_STARTUP_WAIT_TIMEOUT_MS = 3000;
 
 // time to wait (ms) before listening for events if the browser is starting up
 // (we allow time for it to create windows, tabs, etc when restoring previous session)
+// must be greater than ON_STARTUP_WAIT_TIMEOUT_MS
 const LISTEN_DELAY_ON_BROWSER_STARTUP_MS = 10000;
 
 // time to wait after a new tab is created before checking its group
@@ -467,7 +468,7 @@ async function collapseInactiveGroups(activeTab)
 //
 async function restorePositionOfGroupActiveDuringLastCompact(windowId)
 {
-    const thisWindowData = getWindowData(activeTab.windowId)
+    const thisWindowData = getWindowData(windowId)
 
     try
     {
@@ -486,6 +487,8 @@ async function restorePositionOfGroupActiveDuringLastCompact(windowId)
             // i guess we want the group to be to the right of any group in this old position
             thisWindowData.groupActiveDuringLastCompactPrevPos++;
 
+            let tabIndexToMoveTo = ALIGN.RIGHT;
+
             // retrive the tab group that's currently occupying the group pos index where the previously active group was
             if (groupsOrdered[thisWindowData.groupActiveDuringLastCompactPrevPos])
             {
@@ -497,8 +500,7 @@ async function restorePositionOfGroupActiveDuringLastCompact(windowId)
                 // fetch the tab index of the first tab of the group that's currently at this group index position
                 tabIndexToMoveTo = await getIndexOfFirstTabInGroup(groupsOrdered[thisWindowData.groupActiveDuringLastCompactPrevPos]);
 
-                console.debug(`${CONSOLE_PREFIX} ... leftmost tab has index`, tabIndexToMoveTo);
-
+                console.debug(`${CONSOLE_PREFIX} Leftmost tab of group currently at the old position of the group active during last compact has index`, tabIndexToMoveTo);
             }
             else
             {
@@ -506,7 +508,6 @@ async function restorePositionOfGroupActiveDuringLastCompact(windowId)
                 // this might happen if the user has closed some groups or moved them into a different window
                 // all we can do is tack this group on to the end
                 console.log(CONSOLE_PREFIX + " No group currently at this group's previous location.  Moving to rightmost position.");
-                tabIndexToMoveTo = ALIGN.RIGHT;
             }
 
             /*
@@ -645,8 +646,10 @@ async function compactGroups(activeTab)
     // START sanity checks
     if (activeTab.active === false)
     {
-        console.error(CONSOLE_PREFIX + " compactGroups() called with a non-active tab!", activeTab);
-        throw new Error("compactGroups() called with an inactive tab!");
+        console.warn(CONSOLE_PREFIX + " compactGroups() called with a non-active tab!", activeTab);
+        // presumably the tab has been deactivated since the scheduleCompactOtherGroups()
+        //throw new Error("compactGroups() called with an inactive tab!");
+        return
     }
 
     if (!isValidEnumValue(userOptions.alignActiveTabGroup, ALIGN))
@@ -761,7 +764,7 @@ async function compactGroups(activeTab)
         // ==================================================================
         // (D) position the new active `group` to the very left or very right
         // ==================================================================
-        console.log(CONSOLE_PREFIX + " ==== (D) Aliging active group to leftmost/rightmost...");
+        console.log(`${CONSOLE_PREFIX} ==== (D) Aliging active group to ${userOptions.alignActiveTabGroup === ALIGN.LEFT ? "leftmost" : "rightmost"}...`);
 
         try
         {
@@ -1157,17 +1160,17 @@ async function onTabActivated(activeInfo)
 
     if (await isContentScriptActive(activeInfo.tabId))
     {
-        console.debug(`${CONSOLE_PREFIX} Activated tab ${activeInfo.tabId} already has content script injected`);
+        console.debug(`${CONSOLE_PREFIX} Activated tab ${activeInfo.tabId} has content script injected - waiting for mouse to enter content area to trigger compact...`);
 
         // we might have triggered a compact from clicking a system tab and then have switched to this tab
-        // so we cancel any ticking timers
+        // so we cancel any ticking timers and just await the user moving their mouse cursor into the content area of this tab to trigger a compact
         cancelCompactTimer(activeInfo.windowId);
         return;
     }
 
     if (!DYNAMIC_INJECTS)
     {
-        console.log(`${CONSOLE_PREFIX} Activated tab ${activeInfo.tabId} has no content script injected and dynamic injects are disabled`);
+        console.log(`${CONSOLE_PREFIX} >>> Activated tab ${activeInfo.tabId} has NO content script injected - starting timer for compact...`);
         onActivateUninjectableTab(activeInfo.tabId);
         return;
     }
@@ -1596,9 +1599,16 @@ function onWindowRemoved(windowId)
 function onSuspend()
 {
     deregisterListeners();
+    //saveWindowData();  // chrome.storage.local.set() is async so may not complete
     console.log(CONSOLE_PREFIX + 'Service worker is being suspended/stopped.  Sayonara!  o/');
 }
 
+
+function onSuspendCanceled()
+{
+    console.log(CONSOLE_PREFIX + 'Service worker suspend was canceled.  Staying alive and re-registering listeners!');
+    registerListeners();
+}
 
 
 // register our listeners
@@ -1620,6 +1630,7 @@ function registerListeners()
     chrome.storage.onChanged.addListener(onStorageChanged);
 
     chrome.runtime.onSuspend.addListener(onSuspend);
+    chrome.runtime.onSuspendCanceled.addListener(onSuspendCanceled);
 
     console.log(CONSOLE_PREFIX + " Listeners registered");
 
@@ -1652,25 +1663,12 @@ function deregisterListeners()
 
 
 
-// activate the extension
+// load windowData from local storage into the global variable globalWindowDataMap
+// prune any entries for windows that have been closed since the last save
+// and initialise entries for any new windows
 //
-async function startUp()
+async function loadWindowDataFromStorage()
 {
-    console.log(CONSOLE_PREFIX + " >>>>>>>> Starting up...");
-    registerListeners();
-    browserStartingUp = false;
-
-    // some test code to run on startup
-    /*
-    testApiGroupSaving().then(() =>
-    {
-        setTimeout(() =>
-        {
-            testClosingTabFromSavedGroup(true);
-        }, 30000);
-    });
-    */
-
     try
     {
         // windowData is stored in storage rather than just as a global variable because
@@ -1686,7 +1684,7 @@ async function startUp()
             const allWindowIds = allWindows.map(win => win.id);
 
             // if a new window was created while we weren't running and
-            // it happens to have the same ID as a different window that was closed while we weren't running
+            // just happens to have the same ID as a different window that was closed while we weren't running
             // i don't think there's a lot we can do
 
             // verify that these window IDs are still valid - filter out all entries for windows that no longer exist
@@ -1709,13 +1707,121 @@ async function startUp()
         }
         else
         {
-            console.warn(CONSOLE_PREFIX + " Empty windowData found in local storage. Ignoring");
+            console.warn(CONSOLE_PREFIX + " Empty or no windowData found in local storage. Ignoring");
         }
     }
     catch (err)
     {
         console.error(CONSOLE_PREFIX + " Failed to retrieve windowData from local storage:", err);
     }
+}
+
+
+
+function loadOptionsFromStorage(clearUnrecognisedKeys = false)
+{
+    // populate userOptions from the sync extension storage
+    // the argument to .get() here is a dictionary specifying default values
+    chrome.storage.sync.get(DEFAULT_OPTIONS).
+        then((options) =>
+        {
+            userOptions = options;
+            console.log(CONSOLE_PREFIX + " Options read from storage:", userOptions);
+        },
+            (err) =>
+            {
+                console.error(CONSOLE_PREFIX + " Failed to read options from storage, using defaults:", err);
+            }
+        );
+
+
+    // local any stored and unrecognised keys, in case there are any old options from a previous version of the extension
+    chrome.storage.sync.getKeys()
+        .then((keys) =>
+        {
+            // Filter out any unrecognised keys
+            const recognisedKeys = Object.keys(DEFAULT_OPTIONS);
+            const unrecognisedKeys = keys.filter(key => !recognisedKeys.includes(key));
+
+            if (unrecognisedKeys.length > 0)
+            {
+                console.warn(CONSOLE_PREFIX + " Found unrecognised keys in storage:", unrecognisedKeys);
+
+                if (clearUnrecognisedKeys)
+                {
+                    chrome.storage.sync.remove(unrecognisedKeys)
+                        .then(() =>
+                        {
+                            console.log(CONSOLE_PREFIX + " Unrecognised keys removed from storage:", unrecognisedKeys);
+                        },
+                            (err) =>
+                            {
+                                console.error(CONSOLE_PREFIX + " Failed to remove unrecognised keys from storage:", err);
+                            });
+                }
+            }
+        });
+
+}
+
+
+
+// let's guess if the browser is starting up
+//
+async function isBrowserLikelyStartingUp()
+{
+    try
+    {
+        // If multiple windows are being restored, we're likely in a startup scenario
+        return (await chrome.windows.getAll().length === 0)
+    }
+    catch (err)
+    {
+        // failed to call chrome.windows.getAll() suggests we're starting up and the API isn't ready yet?
+        return true;
+    }
+}
+
+
+
+// event handler for when we think the browser is starting up -
+// we delay our extension startup logic for a short while to avoid interfering with the browser's own startup procedure
+// of restoring windows, tabs, and groups from a previous session
+//
+function onBrowserStartingUp()
+{
+    // if we haven't already handled a browser startup scenario
+    if (!browserStartingUp)
+    {
+        browserStartingUp = true;  // this will stop our initial setTimeout() (below) from progressing any further
+        console.log(`${CONSOLE_PREFIX} >>> Browser is starting up - waiting ${LISTEN_DELAY_ON_BROWSER_STARTUP_MS} ms before extension startup`);
+        // FIXME: we should wait until all windows have loaded, not just a fixed time - letting it "settle"
+
+        setTimeout(startUp, LISTEN_DELAY_ON_BROWSER_STARTUP_MS);
+    }
+}
+
+
+// activate the extension
+//
+async function startUp()
+{
+    console.log(CONSOLE_PREFIX + " >>>>>>>> Starting up...");
+    registerListeners();
+    browserStartingUp = false; // it was either not starting up, or we started extension because we decided brower startup had finished
+
+    await loadWindowDataFromStorage();
+
+    // some test code to run on startup
+    /*
+    testApiGroupSaving().then(() =>
+    {
+        setTimeout(() =>
+        {
+            testClosingTabFromSavedGroup(true);
+        }, 30000);
+    });
+    */
 }
 
 
@@ -1800,7 +1906,6 @@ async function testClosingTabFromSavedGroup(closeAll = false)
 // ====================================================
 
 
-
 // Stop console.debug() working if we're not debugging
 if (!SHOW_DEBUG_CONSOLE_MSGS)
 {
@@ -1809,48 +1914,30 @@ if (!SHOW_DEBUG_CONSOLE_MSGS)
 
 let browserStartingUp = false;
 
-
-// Delay starting extension logic for a short while to avoid messing while
+// We try to delay starting extension logic for a short while to avoid messing while
 // the browser restores windows, tabs, and groups from a previous session
-// Fired when a profile that has this extension installed first starts up
-chrome.runtime.onStartup.addListener(() =>
+// NOTE: there's no guarantee that the listener will be registered before the startUp event has fired
+if (isBrowserLikelyStartingUp())
 {
-    // Initialization code for startup scenarios
-    console.log(CONSOLE_PREFIX + " >>> Browser is in process of starting up.  Sleeping for " + LISTEN_DELAY_ON_BROWSER_STARTUP_MS + " ms before extension startup.");
-    // FIXME: we should wait until all windows have loaded, not just a fixed time
+    console.log(CONSOLE_PREFIX + " >>> Browser is *likely* starting up - delaying extension startup logic...");
+    onBrowserStartingUp();
+}
+else
+{
+    chrome.runtime.onStartup.addListener(onBrowserStartingUp());
 
-    browserStartingUp = true;  // this will stop our first setTimeout() from progressing
-    setTimeout(startUp, LISTEN_DELAY_ON_BROWSER_STARTUP_MS);
-});
-
-
-// remove that old key
-chrome.storage.sync.remove('doCompactOnActivateUngroupedTab');
-
-
-// populate userOptions from the sync extension storage
-chrome.storage.sync.get(DEFAULT_OPTIONS).
-    then((options) =>
+    setTimeout(() =>
     {
-        userOptions = options;
-        console.log(CONSOLE_PREFIX + " Options read from storage:", userOptions);
-    },
-        (err) =>
+        if (!browserStartingUp)
         {
-            console.error(CONSOLE_PREFIX + " Failed to read options from storage, using defaults:", err);
+            console.log(CONSOLE_PREFIX + " >>> Timed out waiting for onStartup event.  Assuming browser isn't starting up.");
+            startUp();
         }
-    );
+    }, ON_STARTUP_WAIT_TIMEOUT_MS);
 
+}
 
-setTimeout(() =>
-{
-    if (!browserStartingUp)
-    {
-        console.log(CONSOLE_PREFIX + " >>> Timed out waiting for onStartup event.  Assuming browser isn't starting up.");
-        startUp();
-    }
-}, ON_STARTUP_WAIT_TIMEOUT_MS);
-
+loadOptionsFromStorage(true);
 
 console.log(`${CONSOLE_PREFIX} Tab Groups Plus v${chrome.runtime.getManifest().version} service worker has started.`);
 
