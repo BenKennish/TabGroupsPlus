@@ -1706,6 +1706,8 @@ async function loadWindowDataFromStorage()
                 {
                     return true;
                 }
+                // FIXME: i think this isn't working properly when the browser has loaded but the windows
+                // haven't loaded because they haven't been focused by the user yet (Windows shows blank taskbar previews)
                 console.warn(CONSOLE_PREFIX + " Window vanished since last windowData save: ", winId);
                 return false;
             }));
@@ -1828,7 +1830,7 @@ async function startUp()
     await loadWindowDataFromStorage();
 
     // we're done listening for this
-    chrome.runtime.onStartup.removeListener(onBrowserStartingUp());
+    //chrome.runtime.onStartup.removeListener(onBrowserStartingUp());
 }
 
 
