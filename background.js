@@ -19,12 +19,18 @@ const ON_STARTUP_WAIT_TIMEOUT_MS = 3000;
 // time to wait (ms) before listening for events if the browser is starting up
 // (we allow time for it to create windows, tabs, etc when restoring previous session)
 // must be greater than ON_STARTUP_WAIT_TIMEOUT_MS
-const LISTEN_DELAY_ON_BROWSER_STARTUP_MS = 10000;
+const LISTEN_DELAY_ON_BROWSER_STARTUP_MS = 5000;
 
 // time to wait after a new tab is created before checking its group
 // (the reason for this is that the browser may have plans to move the tab
 // into a group automatically very shortly after its creation)
 const CHECK_GROUPING_DELAY_ON_CREATE_TAB_MS = 250;
+
+// if we find that tabs are locked from editing, we wait this long before trying again
+const RETRY_DELAY_ON_LOCKED_TABS_MS = 1000
+
+// if we find that tabs are locked from editing, we will retry this many times before giving up and skipping the operation
+const MAX_RETRIES_ON_LOCKED_TABS = 5
 
 // enable/disable console.debug() messages
 // yes, the user can filter these out of the console if they want, but this allows cutting them out for performance reasons
@@ -386,6 +392,51 @@ async function countTabsInGroup(groupId)
 
 
 
+// test whether any of the tabs in a window are currently "locked" from editing
+// due to user dragging a tab (or any other reason)
+// by attempting a no-op operation on a supplied tab/group
+//
+async function areTabsLocked(tab = null, group = null)
+{
+    try
+    {
+        if (null !== tab)
+        {
+            // no-op: move tab to its current position
+            await chrome.tabs.move(tab.id, { index: tab.index })
+        }
+        else if (null !== group)
+        {
+            // no-op: set collapsed state to what it already is
+            await chrome.tabGroups.update(group.id, { collapsed: group.collapsed })
+        }
+        else
+        {
+            throw new Error("areTabsLocked() requires a tab or group to test")
+        }
+        return false
+    }
+    catch (err)
+    {
+        // might this error message change?  this seems fragile but this is how it's documented in API docs
+        if (err == "Error: Tabs cannot be edited right now (user may be dragging a tab).")
+        {
+            console.log(`${CONSOLE_PREFIX} Tabs are currently locked from editing:`, err);
+            return true
+        }
+        else
+        {
+            console.error(`${CONSOLE_PREFIX} Error in areTabsLocked() when testing if tabs are locked:`, err);
+            throw err
+        }
+    }
+
+}
+
+
+
+
+
 // collapse all tab groups in a window except the one with group ID `excludeGroupId`
 // (if you want to collapse all groups, pass chrome.tabGroups.TAB_GROUP_ID_NONE for excludeGroupId)
 //
@@ -664,7 +715,7 @@ async function alignUngroupedTabs(windowId, alignment = ALIGN.RIGHT)
 //
 // `activeTab` represents the current active tab of the window (or at least it should be active!)
 //
-async function compactGroups(activeTab)
+async function compactGroups(activeTab, triesLeft = MAX_RETRIES_ON_LOCKED_TABS)
 {
     console.log(CONSOLE_PREFIX + " >>>> compactGroups() running for window " + activeTab.windowId + ", active tab is:", activeTab);
 
@@ -682,9 +733,18 @@ async function compactGroups(activeTab)
         console.error(CONSOLE_PREFIX + ' Unexpected value for alignActiveTabGroup', userOptions.alignActiveTabGroup);
         throw new Error('Unexpected value for alignActiveTabGroup: ' + userOptions.alignActiveTabGroup);
     }
+
     // END sanity checks
 
-    // FIXME: we are passing this around quite a lot which seems problematic
+    // check whether the user is dragging a tab and if they are, reschedule ourselves for later
+    if (await areTabsLocked(activeTab))
+    {
+        triesLeft--
+        console.log(`${CONSOLE_PREFIX} Tabs are currently locked from editing (${triesLeft} attempts left) - rescheduling compactGroups()`);
+        scheduleCompactOtherGroups(activeTab, RETRY_DELAY_ON_LOCKED_TABS_MS, triesLeft);
+        return
+    }
+
     const thisWindowData = getWindowData(activeTab.windowId);
 
     // ==================================================================
@@ -851,10 +911,16 @@ async function compactGroups(activeTab)
 // schedule a timer for a collapse-and-move operation (after delayMs)
 // on all other tab groups in the window apart from the group of the given "tab"
 //
-function scheduleCompactOtherGroups(tab, delayMs)
+function scheduleCompactOtherGroups(tab, delayMs, triesLeft = MAX_RETRIES_ON_LOCKED_TABS)
 {
     // as things stand, tab is active but the other groups have not been collapsed
     // nor has this active tab's group been moved around
+
+    if (triesLeft <= 0)
+    {
+        console.warn(`${CONSOLE_PREFIX} Ran out of attempts to schedule compact operation for window ${tab.windowId} after ${MAX_RETRIES_ON_LOCKED_TABS} attempts.`);
+        return;
+    }
 
     if (tab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE && !userOptions.compactOnActivateUngroupedTab)
     {
@@ -899,7 +965,7 @@ function scheduleCompactOtherGroups(tab, delayMs)
                 throw err;
             }
 
-            await compactGroups(tab);
+            await compactGroups(tab, triesLeft);
 
         }
         catch (err)
