@@ -1787,12 +1787,14 @@ async function isBrowserLikelyStartingUp()
     try
     {
         // if there are no windows yet, we're likely in a startup scenario
-        return (await chrome.windows.getAll().length === 0)
+        let windowCount = (await chrome.windows.getAll()).length;
+        return (windowCount === 0)
     }
     catch (err)
     {
         // failed to call chrome.windows.getAll() suggests we're starting up and the API isn't ready yet?
-        return true;
+        console.error(`${CONSOLE_PREFIX} Error calling chrome.windows.getAll() in isBrowserLikelyStartingUp:`, err);
+        return true
     }
 }
 
@@ -1805,9 +1807,9 @@ async function isBrowserLikelyStartingUp()
 function onBrowserStartingUp()
 {
     // if we haven't already handled a browser startup scenario
-    if (!browserStartingUp)
+    if (!haveHandledBrowserStartUp)
     {
-        browserStartingUp = true;  // this will stop our initial setTimeout() (below) from progressing any further
+        haveHandledBrowserStartUp = true;
         console.log(`${CONSOLE_PREFIX} >>> Browser is starting up - waiting ${LISTEN_DELAY_ON_BROWSER_STARTUP_MS} ms before extension startup`);
         // FIXME: we should wait until all windows have loaded, not just a fixed time - letting it "settle"
 
@@ -1825,7 +1827,7 @@ async function startUp()
 {
     console.log(CONSOLE_PREFIX + " >>>>>>>> Starting up...");
     registerListeners();
-    browserStartingUp = false; // it was either not starting up, or we started extension because we decided brower startup had finished
+    haveHandledBrowserStartUp = false; // it was either not starting up, or we started extension because we decided brower startup had finished
 
     await loadWindowDataFromStorage();
 
@@ -1849,30 +1851,39 @@ if (!SHOW_DEBUG_CONSOLE_MSGS)
     console.debug = () => { };
 }
 
-let browserStartingUp = false;
+let haveHandledBrowserStartUp = false;
 
 // We try to delay starting extension logic for a short while to avoid messing while
 // the browser restores windows, tabs, and groups from a previous session
 // NOTE: there's no guarantee that the listener will be registered before the startUp event has fired
-if (isBrowserLikelyStartingUp())
-{
-    console.log(CONSOLE_PREFIX + " >>> Browser is *likely* starting up - delaying extension startup logic...");
-    onBrowserStartingUp();
-}
-else
-{
-    chrome.runtime.onStartup.addListener(onBrowserStartingUp());
 
-    setTimeout(() =>
+
+// we cannot do a top-level await in this service worker so we wrap this up in an async
+setTimeout(async () =>
+{
+    // check if we think the browser is starting up
+    if (await isBrowserLikelyStartingUp())
     {
-        if (!browserStartingUp)
-        {
-            console.log(CONSOLE_PREFIX + " >>> Timed out waiting for onStartup event.  Assuming browser isn't starting up.");
-            startUp();
-        }
-    }, ON_STARTUP_WAIT_TIMEOUT_MS);
+        console.log(CONSOLE_PREFIX + " >>> isBrowserLikelyStartingUp() returned true - delaying extension startup logic...");
+        onBrowserStartingUp();
+    }
+    else
+    {
+        // register the onStartup listener if the browser wants to tell us it's starting up
+        chrome.runtime.onStartup.addListener(onBrowserStartingUp());
 
-}
+        setTimeout(() =>
+        {
+            if (!haveHandledBrowserStartUp)
+            {
+                console.log(CONSOLE_PREFIX + " >>> Timed out waiting for onStartup event.  Assuming browser isn't starting up.");
+                startUp();
+            }
+        }, ON_STARTUP_WAIT_TIMEOUT_MS);
+
+    }
+
+}, 100);
 
 loadOptionsFromStorage();
 
