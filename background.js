@@ -82,6 +82,11 @@ const newWindowDataObj = {
 
 
 
+// maps tab IDs to group IDs so that we can restore pinned tabs to their previous group
+// TODO: we might want to store group names rather than IDs as the IDs can change
+const pinnedTabsPreviousGroup = new Map();
+
+
 // ============================================================================
 // ============================================================================
 // ============================================================================
@@ -1108,7 +1113,7 @@ function doesAutoGroupRuleMatch(autoGroupRule, url, hostname)
         case AUTO_GROUP_PATTERN_TYPE.DOMAINNAME:
             if (hostname === autoGroupRule.pattern || hostname.endsWith('.' + autoGroupRule.pattern))
             {
-                console.log(`${CONSOLE_PREFIX} URL ${url} MATCHES domainname pattern:`, autoGroupRule.pattern);
+                console.log(`${CONSOLE_PREFIX} Auto-grouping: URL ${url} MATCHES domainname pattern:`, autoGroupRule.pattern);
                 return true;
             }
 
@@ -1132,7 +1137,7 @@ function doesAutoGroupRuleMatch(autoGroupRule, url, hostname)
             {
                 if (autoGroupRule.regexpCompiled.test(url))
                 {
-                    console.log(`${CONSOLE_PREFIX} URL ${url} MATCHES regexp pattern:`, autoGroupRule.pattern);
+                    console.log(`${CONSOLE_PREFIX} Auto-grouping: URL ${url} MATCHES regexp pattern:`, autoGroupRule.pattern);
                     return true;
                 }
             }
@@ -1325,13 +1330,67 @@ function onTabUpdated(tabId, changeInfo, tab)
 {
     console.debug(`${CONSOLE_PREFIX} Tab ${tabId} updated.  changeInfo:`, changeInfo, tab);
 
-    if (userOptions.autoGroupingEnabled &&
-        (userOptions.autoGroupingChecksExistingTabs || tabsAwaitingFirstUrl.has(tabId)) &&
-        changeInfo.url && !changeInfo.url.startsWith('chrome://'))
+    // if the pinned property has changed
+    if (changeInfo.pinned !== undefined)
     {
-        // url has changed, is not falsy, and isn't a system URL
-        // status may well be "loading" but thats ok - we can still auto group loading tabs
+        // tab has been pinned and was in a group
+        if (changeInfo.pinned === true &&
+            tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
+        {
+            console.log(`${CONSOLE_PREFIX} Tab was pinned and previously in group ${tab.groupId}`, tab)
 
+            // remember the group it was in so we can restore the group on unpin
+            pinnedTabsPreviousGroup.set(tabId, tab.groupId)
+        }
+        else
+        // tab has been unpinned
+        {
+            // - place the tab back in it's previous group? (TODO: new config `regroupOnUnpinTab`?)
+
+            // `treatUnpinnedAsNewTab`
+            //   - apply autogroup rules?
+            //   - place tab in the previously active group?
+
+            console.log(`${CONSOLE_PREFIX} Tab was unpinned`, tab)
+
+            const lastGroupId = pinnedTabsPreviousGroup.get(tabId)
+
+            if (lastGroupId !== undefined)
+            {
+                // place tab back in the group it was in just before being pinned
+                chrome.tabs.group({ groupId: lastGroupId, tabIds: tabId })
+                    .then(() =>
+                    {
+                        console.log(`${CONSOLE_PREFIX} Restoring unpinned tab to previous group ${lastGroupId}`, tab)
+                    })
+                    .catch(() =>
+                    {
+                        console.error(`${CONSOLE_PREFIX} Error grouping unpinnned tab`)
+                    })
+            }
+            else
+            {
+                // we have no record of the unpinned tab's previous group so let's try something else
+
+                // we ensure autogrouping works below by pretending the URL changed and
+                // that the tab is awaiting its first URL
+                changeInfo.url = tab.url
+                tabsAwaitingFirstUrl.add(tabId)
+            }
+
+            pinnedTabsPreviousGroup.delete(tabId)
+        }
+
+    }
+
+    // handle auto grouping
+    // url has changed and isn't a system URL
+    // status may well be "loading" but thats ok - we can still auto group loading tabs
+    if (userOptions.autoGroupingEnabled &&
+        (changeInfo.url && !changeInfo.url.startsWith('chrome://')) &&
+        (userOptions.autoGroupingChecksExistingTabs || tabsAwaitingFirstUrl.has(tabId))
+    )
+    {
         console.debug(`${CONSOLE_PREFIX} New URL ${changeInfo.url} in tab: `, tab);
 
         // check if this tab should be auto grouped (depending on URL)
@@ -1405,14 +1464,13 @@ function onTabUpdated(tabId, changeInfo, tab)
                     console.error(`${CONSOLE_PREFIX} Error retrieving tab group with title '${autoGroupName}':`, err);
                 });
         }
-
-        // delete from our Set
-        tabsAwaitingFirstUrl.delete(tabId);
     }
 
+    // delete from our Set
+    tabsAwaitingFirstUrl.delete(tabId);
 
-    // tab's has been placed in a new group (or been ungrouped)
-    if (changeInfo.hasOwnProperty('groupId'))
+    // tab's has been placed in a new group
+    if (changeInfo.hasOwnProperty('groupId') && changeInfo.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
     {
         isContentScriptActive(tabId).then((isInjected) =>
         {
@@ -1423,22 +1481,17 @@ function onTabUpdated(tabId, changeInfo, tab)
                 // because the content script will collapse the tab groups on mouse entering the content area
                 return;
             }
+            // else non-injected tab...
 
-            // non-injected tab..
-            if (changeInfo.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE)
+            console.log(`${CONSOLE_PREFIX} >>> Uninjected tab ${tabId} moved to group ${changeInfo.groupId}`);
+
+            if (tab.active)
             {
-                // the tab wasn't ungrouped
-                console.log(`${CONSOLE_PREFIX} >>> Uninjected tab ${tabId} moved to group ${changeInfo.groupId}`);
-
-                if (tab.active)
-                {
-                    scheduleCompactOtherGroups(tab, userOptions.delayCompactOnActivateUninjectedTabMs);
-                }
-                else
-                {
-                    console.log(CONSOLE_PREFIX + " Regrouped tab is not the active tab.  Ignoring.");
-                }
-
+                scheduleCompactOtherGroups(tab, userOptions.delayCompactOnActivateUninjectedTabMs);
+            }
+            else
+            {
+                console.log(CONSOLE_PREFIX + " Regrouped tab is not the active tab.  Ignoring.");
             }
         });
     };
