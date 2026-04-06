@@ -1853,7 +1853,7 @@ async function isBrowserLikelyStartingUp()
     try
     {
         // if there are no windows yet, we're likely in a startup scenario
-        let windowCount = (await chrome.windows.getAll()).length;
+        let windowCount = (await chrome.windows.getAll({ populate: false })).length;
         return (windowCount === 0)
     }
     catch (err)
