@@ -1,4 +1,11 @@
 /* Container for the form */
+
+/* The action button's popup's size must be between 25x25 and 800x600 pixels. */
+form {
+    min-width: 400px;
+    max-width: 600px;
+}
+
 .options-form {
     display: flex;
     flex-direction: column;

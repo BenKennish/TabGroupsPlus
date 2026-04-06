@@ -38,7 +38,13 @@
     },
     */
     "action": {
-        "default_title": "Tab Groups Plus"
+        "default_title": "Tab Groups Plus",
+        "default_icon": {
+            //"16": "images/icon16.png",
+            //"24": "images/icon24.png",
+            //"32": "images/icon32.png"
+        },
+        "default_popup": "options.html"
     },
     "incognito": "split",
     "minimum_chrome_version": "89"
