@@ -76,40 +76,61 @@ export const DEFAULT_OPTIONS = Object.freeze({
             [
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'youtube.com' },
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'twitch.tv' },
-                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'netflix.com' }
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'netflix.com' },
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'channel4.com' },
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'bbc.co.uk' },
             ],
         'Guild Wars 2':
             [
-                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'guildwars2.com' }
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'guildwars2.com' },
             ],
         'Testing':
             [
                 // any URL with a GET param "test=autogroup" gets added to the "Testing" tab group
-                { type: AUTO_GROUP_PATTERN_TYPE.REGEXP, pattern: '^https?://([^/]+)/[\\?&]test=autogroup', regexpCompiled: null }
+                { type: AUTO_GROUP_PATTERN_TYPE.REGEXP, pattern: '^https?://([^/]+)/[\\?&]test=autogroup', regexpCompiled: null },
             ],
         'Shopping':
             [
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'amazon.co.uk' },
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'ebay.co.uk' },
             ],
         'SHARED':
             [
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'mail.google.com' },
-                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'calendar.google.com' }
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'calendar.google.com' },
             ],
         'AI':
             [
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'gemini.google.com' },
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'perplexity.ai' },
-                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'chatgpt.com' }
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'chatgpt.com' },
             ],
         'Overwatch':
             [
                 // an example of why you might want domainname pattern to match anywhere within the domain rather than just at the end
-                //  - matching 'overwatch' would be nicer, but this is hardly a tragedy
+                //  - matching 'overwatch.*' would be nicer, but this is hardly a tragedy
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'overwatch.blizzard.com' },
                 { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'overwatch.fandom.com' },
+            ],
+        'Health':
+            [
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'nhs.uk' },
+            ],
+        'Employment':
+            [
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'universal-credit.service.gov.uk' },
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'cv-library.co.uk' },
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'glassdoor.co.uk' },
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'charityjob.co.uk' },
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'indeed.com' },
+            ],
+        'Education':
+            [
+                //
+                { type: AUTO_GROUP_PATTERN_TYPE.DOMAINNAME, pattern: 'classroom.google.com' },
+                { type: AUTO_GROUP_PATTERN_TYPE.REGEXP, pattern: '^https?://([^/]+)\.google\.com/u/1', regexpCompiled: null },
+                // URL path starts with "/u/1/" (shows 2nd user account in use)
             ]
-
     }
 
 
