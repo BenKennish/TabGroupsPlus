@@ -4,7 +4,7 @@
 
 // we use this prefix rather than defining a new wrapper function around console.log etc
 // because it makes tracking errors down easier w.r.t line numbers
-export const CONSOLE_PREFIX = "[TGP]";
+export const CONSOLE_PREFIX = "[TGP]"
 
 // constant objects to fake an 'enum's - not great because multiple properties can have the same value
 // but it makes for more readable code and we can at least have a helper function to check if a value is a valid enum value (e.g. for validating user options)
@@ -15,13 +15,13 @@ export const ALIGN = Object.freeze({
     LEFT: 0,
     RIGHT: -1,
     DISABLED: 42
-});
+})
 //
 // types of auto-grouping patterns
 export const AUTO_GROUP_PATTERN_TYPE = Object.freeze({
     DOMAINNAME: 0,
     REGEXP: 1
-});
+})
 
 export const DEFAULT_OPTIONS = Object.freeze({
 
@@ -134,4 +134,4 @@ export const DEFAULT_OPTIONS = Object.freeze({
     }
 
 
-});
+})
