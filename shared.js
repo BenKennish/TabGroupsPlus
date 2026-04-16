@@ -68,11 +68,14 @@ export const DEFAULT_OPTIONS = Object.freeze({
     // UNIMPLEMENTED
     // the idea is that whenever the URL of a tab is updated, we check if the domain matches the domain of any of the other tabs and, if it does, we group them together if there are more than X tabs for that domain
     // auto grouping (pattern based) should take precedence over magic autogrouping
-    autoGroupingMagicByDomainEnabled: false,
-    autoGroupingMagicIncludeGroupedTabs: false,  // whether already grouped tabs are considered for magic auto-grouping
-    autoGroupingMagicMinTabsByDomain: 3,  // minimum number of tabs with the same domain before we start auto-grouping them together (must be >= 2)
+    /*
+    autoGroupingMagicByDomainEnabled: false,    // e.g. auto grouping multiple amazon.co.uk tabs into a group called "Amazon"
+    autoGroupingMagicIncludeGroupedTabs: false, // whether already grouped tabs are considered for magic auto-grouping (i.e. can we move them to a different group?)
+    autoGroupingMagicMinTabsByDomain: 3,        // minimum number of tabs with the same domain before we start auto-grouping them together (must be >= 2)
+    */
 
     // maps tab group names to lists of rules that define which tabs get auto-grouped into that group
+    // TODO: rename to autoGroupingRules?
     autoGroupRules: {
         'Streaming':
             [

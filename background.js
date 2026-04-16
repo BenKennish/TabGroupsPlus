@@ -722,7 +722,7 @@ async function alignUngroupedTabs(windowId, alignment = ALIGN.RIGHT)
 //
 async function compactGroups(activeTab, triesLeft = MAX_RETRIES_ON_LOCKED_TABS)
 {
-    console.log(CONSOLE_PREFIX + " >>>> compactGroups() running for window " + activeTab.windowId + ", active tab is:", activeTab)
+    console.log(CONSOLE_PREFIX + " >>> Compacting groups for window " + activeTab.windowId + ", active tab is:", activeTab)
 
     // START sanity checks
     if (activeTab.active === false)
@@ -1212,7 +1212,7 @@ function onRuntimeMessage(message, sender, sendResponse)
 //
 function onActivateUninjectableTab(tabId)
 {
-    console.debug(`${CONSOLE_PREFIX} >>> Activated uninjectable tab ${tabId}...`)
+    console.debug(`${CONSOLE_PREFIX} !!! Activated uninjectable tab ${tabId}...`)
 
     chrome.tabs.get(tabId)
         .then((activeTab) =>
@@ -1257,7 +1257,7 @@ async function onTabActivated(activeInfo)
     thisWinData.lastActiveTabId = activeInfo.tabId
     saveWindowData()
 
-    console.debug(CONSOLE_PREFIX + " >>> onActivated tab id:", activeInfo.tabId)
+    console.debug(CONSOLE_PREFIX + "onActivated tab id:", activeInfo.tabId)
 
     if (await isContentScriptActive(activeInfo.tabId))
     {
@@ -1661,7 +1661,7 @@ function onStorageChanged(changes, areaName)
 
     if (areaName === 'sync')
     {
-        console.log(CONSOLE_PREFIX + ' >>> storage.OnChanged', changes, areaName)
+        console.log(CONSOLE_PREFIX + ' >>> sync storage has changed', changes, areaName)
 
         // example structure of `changes`:
         // changes = {
@@ -1952,7 +1952,7 @@ function onBrowserStartingUp()
 //
 async function startUp()
 {
-    console.log(CONSOLE_PREFIX + " >>>>>>>> Starting up...")
+    console.log(CONSOLE_PREFIX + " !!! Starting up...")
     registerListeners()
     haveHandledBrowserStartUp = false // it was either not starting up, or we started extension because we decided brower startup had finished
 
