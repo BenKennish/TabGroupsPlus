@@ -23,6 +23,8 @@ export const AUTO_GROUP_PATTERN_TYPE = Object.freeze({
     REGEXP: 1
 })
 
+// serves as a template of defaults for when options aren't already present in storage
+// but also allows us to reject or throw warning for options that are not defined here
 export const DEFAULT_OPTIONS = Object.freeze({
 
     // do we perform a compact operation when the active tab is not in a group?
@@ -135,3 +137,26 @@ export const DEFAULT_OPTIONS = Object.freeze({
 
 
 })
+
+export const validateOptions = (options) =>
+{
+    const optionNames = Object.keys(options)
+    const allowedOptionNames = Object.keys(DEFAULT_OPTIONS)
+
+    // option names that are in the supplied options but not present in the default template
+    const disallowedOptionNames = optionNames.filter(key => !allowedOptionNames.includes(key))
+
+    if (disallowedOptionNames.length > 0)
+    {
+        throw new Error(`Option names [${disallowedOptionNames.join(', ')}] exist in tested options but not in defaults.`)
+    }
+
+    const missingOptionNames = allowedOptionNames.filter(key => !optionNames.includes(key))
+
+    if (missingOptionNames.length > 0)
+    {
+        console.warn(`Warning: Properties [${missingOptionNames.join(', ')}] exist in defaults but not in tested options.`)
+    }
+
+    return true
+}

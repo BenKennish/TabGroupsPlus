@@ -1,4 +1,7 @@
-import { DEFAULT_OPTIONS, CONSOLE_PREFIX } from './shared.js';
+import { DEFAULT_OPTIONS, CONSOLE_PREFIX, validateOptions } from './shared.js'
+
+
+// TODO: is there a better way for us to handle the HTML options and how they map to an HTML control?
 
 document.addEventListener('DOMContentLoaded', () =>
 {
@@ -19,19 +22,30 @@ document.addEventListener('DOMContentLoaded', () =>
             delayCompactOnActivateUninjectedTabMs: parseInt(document.getElementById('delayCompactOnActivateUninjectedTabMs').value, 10) // base 10
         }
 
-        chrome.storage.sync.set(optionsToSave)
-            .then(() =>
-            {
-                // background.js has a listener for the storage being updated so we just close the options window
-                // and let it handle it
-                window.close();
+        try
+        {
+            // will throw on error, or give console warning
+            validateOptions(optionsToSave)
 
-            }).catch((err) =>
-            {
-                console.error(`${CONSOLE_PREFIX} Error setting options in storage:`, err);
-            });
+            chrome.storage.sync.set(optionsToSave)
+                .then(() =>
+                {
+                    // background.js has a listener for the storage being updated so we just close the options window
+                    // and let it handle it
+                    window.close()
 
-    });
+                }).catch((err) =>
+                {
+                    console.error(`${CONSOLE_PREFIX} Error setting options in storage:`, err)
+                })
+        }
+        catch (err)
+        {
+            console.error(`${CONSOLE_PREFIX} Failed to save options as validation failed`)
+        }
+        // background.js has an event handler registered for chrome.storage.onChanged
+        // so when we update the sync storage, this will be
+    })
 
     // Close window when cancel button clicked
     document.getElementById('cancelBtn').addEventListener('click', (event) =>

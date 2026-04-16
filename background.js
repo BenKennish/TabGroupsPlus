@@ -1678,7 +1678,15 @@ function onStorageChanged(changes, areaName)
             {
                 // item changed or added to the storage
                 console.debug(`${CONSOLE_PREFIX} storage updating ${changedPropertyName} to`, changes[changedPropertyName].newValue)
-                userOptions[changedPropertyName] = changes[changedPropertyName].newValue
+
+                if (DEFAULT_OPTIONS[changedPropertyName] === undefined)
+                {
+                    console.error(`${CONSOLE_PREFIX} Unexpected option read from storage: '${changedPropertyName}' (not in DEFAULT_OPTIONS)`)
+                }
+                else
+                {
+                    userOptions[changedPropertyName] = changes[changedPropertyName].newValue
+                }
             }
             else
             {
@@ -2004,7 +2012,7 @@ setTimeout(async () =>
 
 }, 100)
 
-loadOptionsFromStorage()
+loadOptionsFromStorage(true)  // true means to clear unrecognised keys
 
 console.log(`${CONSOLE_PREFIX} Tab Groups Plus v${chrome.runtime.getManifest().version} service worker has started.`);
 
